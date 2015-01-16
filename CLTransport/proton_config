@@ -1,0 +1,19 @@
+// directory for macro cross section:
+input/mcpro.imfp
+// directory for mass stopping power ratio:
+input/mcpro.mater
+// directory for restricted stopping power in water:
+input/mcpro.rstpw
+// directory for density correction factor:
+input/densityCorrection.dat
+// beam parameters: width, energy, number of protons, source center
+5  5
+150.00000000
+10000000
+0.00000000 -9.999999 0.00000000
+// phantom parameters: vox size, iso center, width, hight, depth
+0.2 0.1	0.2
+0.00000000 0.00000000 0.00000000
+51	200	51
+// output directory
+Output/
