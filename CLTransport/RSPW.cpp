@@ -44,7 +44,7 @@ bool RSPW::setData(const char * filename, const OpenCLStuff & stuff){
 	ifs.close();
 
 	cl::ImageFormat format(CL_RG, CL_FLOAT);
-	rspw = cl::Image1D(stuff.context, CL_MEM_READ_ONLY, format, nData);
+	rspw = cl::Image2D(stuff.context, CL_MEM_READ_ONLY, format, nData, 1);
 	cl::size_t<3> origin;
 	cl::size_t<3> region;
 	region[0] = nData;

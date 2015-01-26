@@ -7,7 +7,7 @@
 
 #ifndef MACROCROSSSECTION_H_
 #define MACROCROSSSECTION_H_
-#include <CL/cl.hpp>
+#include "cl.hpp"
 using namespace std;
 
 class OpenCLStuff;
@@ -23,7 +23,7 @@ public:
 	float lookPE(float e) const;
 	float lookOE(float e) const;
 	float lookOI(float e) const;*/
-	cl::Image1D & gpu() { return mcs; }
+	cl::Image2D & gpu() { return mcs; }
 
 private:
 	float minElectronEnergy, minProtonEnergy, maxProtonEnergy, energyInterval;
@@ -33,7 +33,7 @@ private:
 	};
 	MCS * macroSigma;
 
-	cl::Image1D mcs;
+	cl::Image2D mcs;
 };
 
 #endif /* MACROCROSSSECTION_H_ */

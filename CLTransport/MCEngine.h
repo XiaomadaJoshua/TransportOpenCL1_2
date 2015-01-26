@@ -1,5 +1,5 @@
 #pragma once
-#include <CL/cl.hpp>
+#include "cl.hpp"
 #include <string>
 #include "OpenCLStuff.h"
 #include "Macro.h"

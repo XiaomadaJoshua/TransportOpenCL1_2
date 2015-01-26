@@ -12,7 +12,7 @@ __kernel void test2D(read_only image2d_t data, __global float4 * value, __global
 	value[gid] = read_imagef(data, sampler, cord[gid]);
 }
 
-__kernel void testPhantom(read_only image3d_t vox, __global float8 * dose, float4 cord, __global float16 * value){
+__kernel void testPhantom(read_only image3d_t vox, __global float * dose, float4 cord, __global float16 * value){
 	size_t gid = get_global_id(0);
 	sampler_t sampler = CLK_NORMALIZED_COORDS_FALSE | CLK_ADDRESS_CLAMP_TO_EDGE | CLK_FILTER_NEAREST;
 	value[gid].s0123 = read_imagef(vox, sampler, cord);

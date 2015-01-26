@@ -7,7 +7,7 @@
 
 #ifndef RSPW_H_
 #define RSPW_H_
-#include <CL/cl.hpp>
+#include "cl.hpp"
 
 class OpenCLStuff;
 
@@ -16,7 +16,7 @@ public:
 	RSPW();
 	virtual ~RSPW();
 	virtual bool setData(const char *, const OpenCLStuff &);
-	cl::Image1D & gpu() {return rspw; }
+	cl::Image2D & gpu() {return rspw; }
 
 //	float lookLw(float e) const;
 //	float lookB(float e) const;
@@ -29,7 +29,7 @@ private:
 	};
 	Lwb * data;
 	
-	cl::Image1D rspw;
+	cl::Image2D rspw;
 };
 
 #endif /* RSPW_H_ */

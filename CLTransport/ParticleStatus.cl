@@ -85,7 +85,7 @@ float step2VoxBoundary(float3 pos, float3 dir, float3 voxSize, int * cb) {
 	return step < ZERO ? ZERO : step;
 }
 
-float energyInOneStep(float4 vox, PS * particle, read_only image1d_t RSPW, read_only image2d_t MSPR, float stepLength) {
+float energyInOneStep(float4 vox, PS * particle, read_only image2d_t RSPW, read_only image2d_t MSPR, float stepLength) {
 	//calculate equivalent step in water
 
 	float stepInWater;
@@ -94,7 +94,7 @@ float energyInOneStep(float4 vox, PS * particle, read_only image1d_t RSPW, read_
 	stepInWater = mspr.s0*stepLength*vox.s2/WATERDENSITY;
 
 	//calculate energy transfer
-	float4 rspw = read_imagef(RSPW, sampler, particle->energy/0.5f - 0.5f);
+	float4 rspw = read_imagef(RSPW, sampler, (float2)(particle->energy/0.5f - 0.5f, 0.5f));
 
 
 	float de1 = stepInWater*rspw.s0;
@@ -105,9 +105,9 @@ float energyInOneStep(float4 vox, PS * particle, read_only image1d_t RSPW, read_
 			- b*eps*(0.5f+2.0f*eps/3.0f/(1.0f+temp)/(2.0f+temp) + (1.0f-b)*eps/6.0f) );
 }
 
-inline float totalLinearSigma(float4 vox, read_only image1d_t MCS, float e) {
+inline float totalLinearSigma(float4 vox, read_only image2d_t MCS, float e) {
 	sampler_t sampler = CLK_NORMALIZED_COORDS_FALSE | CLK_ADDRESS_CLAMP_TO_EDGE | CLK_FILTER_LINEAR;
-	float4 mcs = read_imagef(MCS, sampler, e/0.5f - 0.5f);
+	float4 mcs = read_imagef(MCS, sampler, (float2)(e/0.5f - 0.5f, 0.5f));
 	return mcs.s0*vox.s3 + (mcs.s1 + mcs.s2 + mcs.s3)*vox.s2;
 }
 
@@ -229,13 +229,13 @@ inline void atomicAdd(volatile global float * source, const float operand) {
 	atomic_xchg((volatile global unsigned int *)source, newVal.intVal);*/
 }
 
-void score(global float8 * doseCounter, int absIndex, float energyTransfer, float stepLength){
-	atomicAdd(&doseCounter[absIndex].s0, energyTransfer);
+void score(global float * doseCounter, int absIndex, float energyTransfer, float stepLength){
+	atomicAdd(&doseCounter[absIndex], energyTransfer);
 }
 
 void store(PS * newOne, __global PS * secondary, volatile __global uint * nSecondary){
 	if(*nSecondary == 0){
-		printf("\n secondary particle overflow!!!\n");
+//		printf("\n secondary particle overflow!!!\n");
 		return;	
 	}
 	atomic_dec(nSecondary);
@@ -244,7 +244,7 @@ void store(PS * newOne, __global PS * secondary, volatile __global uint * nSecon
 }
 
 
-void ionization(PS * thisOne, global float8 * doseCounter, int absIndex, int * iseed){
+void ionization(PS * thisOne, global float * doseCounter, int absIndex, int * iseed){
 	
 
 	float E = thisOne->energy + thisOne->mass;
@@ -285,7 +285,7 @@ void PPElastic(PS * thisOne, __global PS * secondary, volatile __global uint * n
 	store(&newOne, secondary, nSecondary);
 }
 
-void POElastic(PS * thisOne, global float8 * doseCounter, int absIndex, int * iseed){
+void POElastic(PS * thisOne, global float * doseCounter, int absIndex, int * iseed){
 	// sample energy transferred to oxygen
 	float meanEnergy = 0.65f*exp(-0.0013f*thisOne->energy) - 0.71f*exp(-0.0177f*thisOne->energy);
 	meanEnergy = meanEnergy < 1.0f ? 1.0f : meanEnergy;
@@ -306,7 +306,7 @@ void POElastic(PS * thisOne, global float8 * doseCounter, int absIndex, int * is
 	score(doseCounter, absIndex, energyTransfer, 0.0f);
 }
 
-void POInelastic(PS * thisOne, __global PS * secondary, volatile __global uint * nSecondary, global float8 * doseCounter, int absIndex, int * iseed){
+void POInelastic(PS * thisOne, __global PS * secondary, volatile __global uint * nSecondary, global float * doseCounter, int absIndex, int * iseed){
 	float rand = MTrng(iseed);
 
 	float bindEnergy = EBIND;
@@ -345,9 +345,9 @@ void POInelastic(PS * thisOne, __global PS * secondary, volatile __global uint *
 	update(thisOne, 0.0f, thisOne->energy, 0.0f, 0.0f, 0);
 }
 
-void hardEvent(PS * thisOne, float4 vox, read_only image1d_t MCS, global float8 * doseCounter, int absIndex, global PS * secondary, volatile __global uint * nSecondary, int * iseed){
+void hardEvent(PS * thisOne, float4 vox, read_only image2d_t MCS, global float * doseCounter, int absIndex, global PS * secondary, volatile __global uint * nSecondary, int * iseed){
 	sampler_t sampler = CLK_NORMALIZED_COORDS_FALSE | CLK_ADDRESS_CLAMP_TO_EDGE | CLK_FILTER_LINEAR;
-	float4 mcs = read_imagef(MCS, sampler, thisOne->energy/0.5f - 0.5f);
+	float4 mcs = read_imagef(MCS, sampler, (float2)(thisOne->energy/0.5f - 0.5f, 0.5f));
 	float sigIon = mcs.s0*vox.s3;
 	float sigPPE = mcs.s1*vox.s2;
 	float sigPOE = mcs.s2*vox.s2;
@@ -374,8 +374,8 @@ void hardEvent(PS * thisOne, float4 vox, read_only image1d_t MCS, global float8 
 }
 
 
-__kernel void propagate(__global PS * particle, __global float8 * doseCounter, 
-		__read_only image3d_t voxels, float3 voxSize, __read_only image1d_t MCS, __read_only image1d_t RSPW, 
+__kernel void propagate(__global PS * particle, __global float * doseCounter, 
+		__read_only image3d_t voxels, float3 voxSize, __read_only image2d_t MCS, __read_only image2d_t RSPW, 
 		__read_only image2d_t MSPR, __global PS * secondary, volatile __global uint * nSecondary, int randSeed){
 
 	size_t gid = get_global_id(0);
@@ -402,7 +402,7 @@ __kernel void propagate(__global PS * particle, __global float8 * doseCounter,
 		vox = read_imagef(voxels, voxSampler, (float4)(voxIndex, 0.0f));
 
 		if (thisOne.energy <= MINPROTONENERGY){
-			stepInWater = thisOne.energy / read_imagef(RSPW, dataSampler, thisOne.energy/0.5f - 0.5f).s0;
+			stepInWater = thisOne.energy / read_imagef(RSPW, dataSampler, (float2)(thisOne.energy/0.5f - 0.5f, 0.5f)).s0;
 			stepLength = stepInWater*WATERDENSITY / vox.s2 / read_imagef(MSPR, dataSampler, (float2)(thisOne.energy - 0.5f, vox.s1 + 0.5f)).s0;
 			score(doseCounter, absIndex, thisOne.energy, stepLength);
 			return;
@@ -413,7 +413,7 @@ __kernel void propagate(__global PS * particle, __global float8 * doseCounter,
 		step2bound = step2VoxBoundary(thisOne.pos, thisOne.dir, voxSize, &crossBound);
 		energyTransfer = energyInOneStep(vox, &thisOne, RSPW, MSPR, thisMaxStep);
 		if (energyTransfer > MAXENERGYRATIO*thisOne.energy){
-			stepInWater = MAXENERGYRATIO*thisOne.energy / read_imagef(RSPW, dataSampler, (1 - 0.5f*MAXENERGYRATIO)*thisOne.energy/0.5f - 0.5f).s0;
+			stepInWater = MAXENERGYRATIO*thisOne.energy / read_imagef(RSPW, dataSampler, (float2)((1 - 0.5f*MAXENERGYRATIO)*thisOne.energy/0.5f - 0.5f, 0.5f)).s0;
 			thisMaxStep = stepInWater*WATERDENSITY / vox.s2 / read_imagef(MSPR, dataSampler, (float2)((1 - 0.5f*MAXENERGYRATIO)*thisOne.energy - 0.5f, vox.s1 + 0.5f)).s0;
 		}
 

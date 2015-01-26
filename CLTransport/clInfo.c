@@ -7,8 +7,6 @@
  * (Jeremy Sugerman, 13 August 2009)
  */
 
- 
- 
 #include <stdio.h>
 #include <malloc.h>
 #include <getopt.h>

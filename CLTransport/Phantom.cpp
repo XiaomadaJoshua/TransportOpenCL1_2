@@ -5,6 +5,7 @@
 #include <iostream>
 #include <fstream>
 #include <string>
+#include <math.h>
 
 Phantom::Phantom(OpenCLStuff & stuff, cl_float3 voxSize_, cl_int3 size_, const DensCorrection & densityCF, const MSPR & massSPR) :voxSize(voxSize_), size(size_)
 {
@@ -30,7 +31,7 @@ Phantom::Phantom(OpenCLStuff & stuff, cl_float3 voxSize_, cl_int3 size_, const D
 	region[2] = size.s[2];
 	stuff.queue.enqueueWriteImage(voxelAttributes, CL_TRUE, origin, region, 0, 0, attributes);
 
-	doseCounter = cl::Buffer(stuff.context, CL_MEM_READ_WRITE, sizeof(cl_float8)*nVoxel);
+	doseCounter = cl::Buffer(stuff.context, CL_MEM_READ_WRITE, sizeof(cl_float)*nVoxel);
 
 	std::string source;
 	OpenCLStuff::convertToString("Phantom.cl", source);
@@ -154,9 +155,9 @@ void Phantom::finalize(OpenCLStuff & stuff){
 
 void Phantom::output(OpenCLStuff & stuff, std::string & outDir){
 	int nVoxels = size.s[0] * size.s[1] * size.s[2];
-	cl_float8 * dose = new cl_float8[nVoxels];
+	cl_float * dose = new cl_float[nVoxels];
 	stuff.queue.finish();
-	stuff.queue.enqueueReadBuffer(doseCounter, CL_TRUE, 0, sizeof(cl_float8) * nVoxels, dose);
+	stuff.queue.enqueueReadBuffer(doseCounter, CL_TRUE, 0, sizeof(cl_float) * nVoxels, dose);
 	cl_float * totalDose = new cl_float[nVoxels];
 
 	std::string fileTotal = outDir+"totalDose.dat";
@@ -164,7 +165,7 @@ void Phantom::output(OpenCLStuff & stuff, std::string & outDir){
 	std::ofstream ofsTotal(fileTotal, std::ios::out | std::ios::trunc);
 	bool temp = ofsTotal.is_open();
 	for (int i = 0; i < nVoxels; i++){
-		totalDose[i] = dose[i].s[0];
+		totalDose[i] = dose[i];
 		ofsTotal << totalDose[i] << '\t';
 		if ((i + 1) % size.s[0] == 0)
 			ofsTotal << '\n';

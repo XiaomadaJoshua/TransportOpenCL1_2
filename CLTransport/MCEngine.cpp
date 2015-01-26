@@ -11,8 +11,7 @@
 #include "Secondary.h"
 #include "Phantom.h"
 #include "OpenCLStuff.h"
-
-
+#include <stdio.h>
 
 
 
@@ -22,7 +21,7 @@ MCEngine::MCEngine(const char * file){
 	ifstream ifs(file, fstream::in);
 	char buff[300];
 	string directory;
-
+	
 	// initialize physics data
 	ifs.getline(buff, 300);
 	getline(ifs, directory);

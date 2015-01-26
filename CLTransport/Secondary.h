@@ -1,5 +1,5 @@
 #pragma once
-#include <CL/cl.hpp>
+#include "cl.hpp"
 #include"ParticleStatus.h"
 class OpenCLStuff;
 

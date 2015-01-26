@@ -1,5 +1,5 @@
 #pragma once
-#include <CL/cl.hpp>
+#include "cl.hpp"
 class OpenCLStuff;
 class DensCorrection;
 class MSPR;

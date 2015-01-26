@@ -10,7 +10,7 @@ OpenCLStuff::OpenCLStuff()
 {
 	cl::Platform::get(&platform);
 	std::vector<cl::Device> devs;
-	platform.getDevices(CL_DEVICE_TYPE_CPU, &devs);
+	platform.getDevices(CL_DEVICE_TYPE_GPU, &devs);
 	device = devs[0];
 	context = cl::Context(device);
 	queue = cl::CommandQueue(context, device);
@@ -69,3 +69,12 @@ int OpenCLStuff::convertToString(const char * filename, std::string & s)
 		return SDK_SUCCESS;
 	}
 }
+
+/*
+int OpenCLStuff::convertToSource(const char *filename, cl::Program::Sources & source){
+	std::string sourceStr;
+	convertToString(filename, sourceStr);
+	source = cl::Program::Sources(1,std::make_pair(sourceStr.c_str(), sourceStr.length()+1));
+	
+	return SDK_SUCCESS;
+}*/

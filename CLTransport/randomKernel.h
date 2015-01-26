@@ -1,5 +1,5 @@
-#include "Random123\threefry.h"
-
+//#include "Random123/threefry.h"
+#pragma once
 #define M_RAN_INVM32 2.32830643653869628906e-010
 
 float inverseCumulativeNormal(float u){
@@ -63,7 +63,7 @@ float MTExp(int * iseed, float p){
 
 
 
-
+/*
 
 void getUniform(threefry2x32_ctr_t * c, float * random){
 	threefry2x32_key_t k = { {0} };
@@ -88,4 +88,4 @@ void getExp(threefry2x32_ctr_t * c, float * variates, float p){
 	for (unsigned int i = 0; i<2; i++){
 		*(variates + i) = -log(1 - *(variates + i)) / p;
 	}
-}
+}*/
