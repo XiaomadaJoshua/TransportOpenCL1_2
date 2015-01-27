@@ -12,6 +12,7 @@ class Secondary;
 struct PS{
 	cl_float3 pos, dir;
 	cl_float energy, maxSigma, mass, charge;
+	cl_int ifPrimary;
 };
 
 class ParticleStatus

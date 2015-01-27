@@ -80,7 +80,7 @@ void MCEngine::simulate(float minEnergy){
 		secondary->propagate(stuff, phantom, macroSigma, rspw, mspr, secondary);
 	}
 	secondary->clear(stuff, phantom, macroSigma, rspw, mspr);
-	phantom->finalize(stuff);
+//	phantom->finalize(stuff);
 	phantom->output(stuff, outDir);
 }
 

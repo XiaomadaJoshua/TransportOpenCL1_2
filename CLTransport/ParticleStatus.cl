@@ -1,14 +1,20 @@
 #include "randomKernel.h"
 #include "Macro.h"
 
-typedef struct ParticleStatus{
+typedef struct  __attribute__ ((packed)) ParticleStatus{
 	float3 pos, dir;
 	float energy, maxSigma, mass, charge;
+	int ifPrimary;
 }PS;
 
 
 __kernel void initParticles(__global PS * particle, float T, float2 width, float3 sourceCenter, float m, float c, int randSeed){
 	size_t gid = get_global_id(0);
+	/*
+	if(gid == 0){
+		int size = sizeof(PS);
+		printf("size of PS: %d\n", size);
+	}*/
 	particle[gid].pos.y = -distance(sourceCenter, (float3)(0.0f, 0.0f, 0.0f));
 	int iseed[2];
 	iseed[0] = randSeed;
@@ -25,6 +31,7 @@ __kernel void initParticles(__global PS * particle, float T, float2 width, float
 	particle[gid].maxSigma = 0.0f;
 	particle[gid].mass = m;
 	particle[gid].charge = c;
+	particle[gid].ifPrimary = 1;
 }
 
 bool ifInsidePhantom(float3 pos, float3 voxSize, int3 phantomSize){
@@ -222,15 +229,32 @@ inline void atomicAdd(volatile global float * source, const float operand) {
 		prevVal.floatVal = *source;
 		newVal.floatVal = prevVal.floatVal + operand;
 	} while (atomic_cmpxchg((volatile global unsigned int *)source, prevVal.intVal, newVal.intVal) != prevVal.intVal);
-	
-	/*
-	prevVal.floatVal = *source;
-	newVal.floatVal = prevVal.floatVal + operand;
-	atomic_xchg((volatile global unsigned int *)source, newVal.intVal);*/
+
+//	if(operand == NAN || operand > INF)
+//		printf("error in atomicAdd\n");
 }
 
-void score(global float8 * doseCounter, int absIndex, float energyTransfer, float stepLength){
+	// 0 in float8 is total dose, 1 in float8 is primary fluence, 2 in float8 is secondary fluence, 3 in float8 is primary LET, 4 in float8 is secondary LET, 5 in float8 is primary dose,
+	// 6 in float8 is secondary dose, 7 in float8 is heavy dose.
+void score(global float8 * doseCounter, int absIndex, float energyTransfer, float stepLength, int ifPrimary){
 	atomicAdd(&doseCounter[absIndex].s0, energyTransfer);
+	if(ifPrimary == 1){
+		atomicAdd(&doseCounter[absIndex].s1, 1);
+		atomicAdd(&doseCounter[absIndex].s3, energyTransfer*energyTransfer/stepLength);
+		atomicAdd(&doseCounter[absIndex].s5, energyTransfer);
+	}
+	else{
+		atomicAdd(&doseCounter[absIndex].s2, 1);
+		atomicAdd(&doseCounter[absIndex].s4, energyTransfer*energyTransfer/stepLength);
+		atomicAdd(&doseCounter[absIndex].s6, energyTransfer);
+	}
+
+
+}
+
+void scoreHeavy(global float8 * doseCounter, int absIndex, float energyTransfer){
+	atomicAdd(&doseCounter[absIndex].s0, energyTransfer);
+	atomicAdd(&doseCounter[absIndex].s7, energyTransfer);
 }
 
 void store(PS * newOne, __global PS * secondary, volatile __global uint * nSecondary){
@@ -244,7 +268,7 @@ void store(PS * newOne, __global PS * secondary, volatile __global uint * nSecon
 }
 
 
-void ionization(PS * thisOne, global float8 * doseCounter, int absIndex, int * iseed){
+void ionization(PS * thisOne, global float8 * doseCounter, int absIndex, int * iseed, float stepLength){
 	
 
 	float E = thisOne->energy + thisOne->mass;
@@ -260,7 +284,7 @@ void ionization(PS * thisOne, global float8 * doseCounter, int absIndex, int * i
 
 
 	update(thisOne, 0.0f, Te, 0.0f, 0.0f, 0);
-	score(doseCounter, absIndex, Te, 0.0f);
+	score(doseCounter, absIndex, Te, stepLength, thisOne->ifPrimary);
 
 }
 
@@ -281,6 +305,7 @@ void PPElastic(PS * thisOne, __global PS * secondary, volatile __global uint * n
 
 	PS newOne = *thisOne;
 	newOne.energy = energyTransfer;
+	newOne.ifPrimary = 0;
 	update(&newOne, 0.0f, 0.0f, acos(temp1), phi+PI, 0);
 	store(&newOne, secondary, nSecondary);
 }
@@ -303,7 +328,7 @@ void POElastic(PS * thisOne, global float8 * doseCounter, int absIndex, int * is
 	phi = MTrng(iseed)*2.0f*PI;
 
 	update(thisOne, 0.0f, energyTransfer, theta, phi, 0);
-	score(doseCounter, absIndex, energyTransfer, 0.0f);
+	scoreHeavy(doseCounter, absIndex, energyTransfer);
 }
 
 void POInelastic(PS * thisOne, __global PS * secondary, volatile __global uint * nSecondary, global float8 * doseCounter, int absIndex, int * iseed){
@@ -329,6 +354,7 @@ void POInelastic(PS * thisOne, __global PS * secondary, volatile __global uint *
 		if(rand < 0.650f){ //proton
 			PS newOne = *thisOne;
 			newOne.energy = energy2SecondParticle;
+			newOne.ifPrimary = 0;
 			float costhe = (2.0f - 2.0f*energy2SecondParticle/remainEnergy)*MTrng(iseed) + 2.0f*energy2SecondParticle/remainEnergy - 1.0f;
 			float theta = acos(costhe);
 			float phi = 2.0f*PI*MTrng(iseed);
@@ -341,11 +367,12 @@ void POInelastic(PS * thisOne, __global PS * secondary, volatile __global uint *
 
 		bindEnergy *= 0.85f;
 	}
-	score(doseCounter, absIndex, energyDeposit, 0.0f);
+	scoreHeavy(doseCounter, absIndex, energyDeposit);
 	update(thisOne, 0.0f, thisOne->energy, 0.0f, 0.0f, 0);
 }
 
-void hardEvent(PS * thisOne, float4 vox, read_only image1d_t MCS, global float8 * doseCounter, int absIndex, global PS * secondary, volatile __global uint * nSecondary, int * iseed){
+void hardEvent(PS * thisOne, float stepLength, float4 vox, read_only image1d_t MCS, global float8 * doseCounter, int absIndex, global PS * secondary, volatile __global uint * nSecondary, 
+				int * iseed){
 	sampler_t sampler = CLK_NORMALIZED_COORDS_FALSE | CLK_ADDRESS_CLAMP_TO_EDGE | CLK_FILTER_LINEAR;
 	float4 mcs = read_imagef(MCS, sampler, thisOne->energy/0.5f - 0.5f);
 	float sigIon = mcs.s0*vox.s3;
@@ -356,7 +383,7 @@ void hardEvent(PS * thisOne, float4 vox, read_only image1d_t MCS, global float8 
 	float rand = MTrng(iseed);
 	rand *= thisOne->maxSigma;
 	if(rand < sigIon){
-		ionization(thisOne, doseCounter, absIndex, iseed);
+		ionization(thisOne, doseCounter, absIndex, iseed, stepLength);
 		return;
 	}
 	else if(rand < sigIon + sigPPE){
@@ -404,7 +431,7 @@ __kernel void propagate(__global PS * particle, __global float8 * doseCounter,
 		if (thisOne.energy <= MINPROTONENERGY){
 			stepInWater = thisOne.energy / read_imagef(RSPW, dataSampler, thisOne.energy/0.5f - 0.5f).s0;
 			stepLength = stepInWater*WATERDENSITY / vox.s2 / read_imagef(MSPR, dataSampler, (float2)(thisOne.energy - 0.5f, vox.s1 + 0.5f)).s0;
-			score(doseCounter, absIndex, thisOne.energy, stepLength);
+			score(doseCounter, absIndex, thisOne.energy, stepLength, thisOne.ifPrimary);
 			return;
 		}
 
@@ -452,13 +479,13 @@ __kernel void propagate(__global PS * particle, __global float8 * doseCounter,
 		phi = 2.0f*PI*MTrng(iseed);
 		thisOne.maxSigma = sigma;
 		update(&thisOne, stepLength, energyTransfer, theta, phi, crossBound);
-		score(doseCounter, absIndex, energyTransfer, stepLength);
+		score(doseCounter, absIndex, energyTransfer, stepLength, thisOne.ifPrimary);
 
 		//hard event
 		if(!ifHard)
 			continue;
 
-		hardEvent(&thisOne, vox, MCS, doseCounter, absIndex, secondary, nSecondary, iseed);
+		hardEvent(&thisOne, stepLength, vox, MCS, doseCounter, absIndex, secondary, nSecondary, iseed);
 
 	}
 	

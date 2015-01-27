@@ -20,6 +20,8 @@ private:
 	cl_int3 size;
 	cl_float4 * attributes;
 	cl::Image3D voxelAttributes;
+	// 0 in float8 is total dose, 1 in float8 is primary fluence, 2 in float8 is secondary fluence, 3 in float8 is primary LET, 4 in float8 is secondary LET, 5 in float8 is primary dose,
+	// 6 in float8 is secondary dose, 7 in float8 is heavy dose.
 	cl::Buffer doseCounter;
 	cl::Program program;
 

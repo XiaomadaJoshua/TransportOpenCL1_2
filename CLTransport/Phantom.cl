@@ -14,5 +14,14 @@ __kernel void finalize(__global float8 * doseCounter, read_only image3d_t voxels
 	float4 vox = read_imagef(voxels, voxSampler, (float4)(idx, idy, idz, 0.0f));
 	float mass = vox.s2*voxSize.x*voxSize.y*voxSize.z;
 	
+	// 0 in float8 is total dose, 1 in float8 is primary fluence, 2 in float8 is secondary fluence, 3 in float8 is primary LET, 4 in float8 is secondary LET, 5 in float8 is primary dose,
+	// 6 in float8 is secondary dose, 7 in float8 is heavy dose.
+	doseCounter[absId].s1 = doseCounter[absId].s1/voxSize.x/voxSize.z;
+	doseCounter[absId].s2 = doseCounter[absId].s2/voxSize.x/voxSize.z;
+	doseCounter[absId].s3 = doseCounter[absId].s3/doseCounter[absId].s0/vox.s2;
+	doseCounter[absId].s4 = doseCounter[absId].s4/doseCounter[absId].s0/vox.s2;
+	doseCounter[absId].s5 =  doseCounter[absId].s5/mass;
+	doseCounter[absId].s6 =  doseCounter[absId].s6/mass;
+	doseCounter[absId].s7 =  doseCounter[absId].s7/mass;
 	doseCounter[absId].s0 =  doseCounter[absId].s0/mass;
 }

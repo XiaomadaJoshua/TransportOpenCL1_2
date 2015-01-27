@@ -30,6 +30,8 @@ Phantom::Phantom(OpenCLStuff & stuff, cl_float3 voxSize_, cl_int3 size_, const D
 	region[2] = size.s[2];
 	stuff.queue.enqueueWriteImage(voxelAttributes, CL_TRUE, origin, region, 0, 0, attributes);
 
+	// 0 in float8 is total dose, 1 in float8 is primary fluence, 2 in float8 is secondary fluence, 3 in float8 is primary LET, 4 in float8 is secondary LET, 5 in float8 is primary dose,
+	// 6 in float8 is secondary dose, 7 in float8 is heavy dose.
 	doseCounter = cl::Buffer(stuff.context, CL_MEM_READ_WRITE, sizeof(cl_float8)*nVoxel);
 
 	std::string source;
@@ -158,13 +160,24 @@ void Phantom::output(OpenCLStuff & stuff, std::string & outDir){
 	stuff.queue.finish();
 	stuff.queue.enqueueReadBuffer(doseCounter, CL_TRUE, 0, sizeof(cl_float8) * nVoxels, dose);
 	cl_float * totalDose = new cl_float[nVoxels];
+	cl_float * primaryFluence = new cl_float[nVoxels];
+	cl_float * secondaryFluence = new cl_float[nVoxels];
 
 	std::string fileTotal = outDir+"totalDose.dat";
 	std::string fileTotalBin = outDir+"totalDose.bin";
+	std::string filePF = outDir + "primaryFluence.dat";
+	std::string filePFBin = outDir + "primaryFluence.bin";
+	std::string fileSF = outDir + "secondaryFluence.dat";
+	std::string fileSFBin = outDir + "secondaryFluence.bin";
 	std::ofstream ofsTotal(fileTotal, std::ios::out | std::ios::trunc);
+	std::ofstream ofsPF(filePF, std::ios::out | std::ios::trunc);
+	std::ofstream ofsSF(fileSF, std::ios::out | std::ios::trunc);
+
 	bool temp = ofsTotal.is_open();
 	for (int i = 0; i < nVoxels; i++){
 		totalDose[i] = dose[i].s[0];
+		primaryFluence[i] = dose[i].s[1];
+		secondaryFluence[i] = dose[i].s[2];
 		ofsTotal << totalDose[i] << '\t';
 		if ((i + 1) % size.s[0] == 0)
 			ofsTotal << '\n';
