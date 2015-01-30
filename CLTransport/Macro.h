@@ -14,7 +14,7 @@
 #define EBIND 7.0	//initial binding energy used in p-o inelastic, in MeV
 #define MAXSTEP 0.2 //in cm
 #define MAXENERGYRATIO 0.25 //Max energy decay ratio of initial energy in a step
-#define MINPROTONENERGY 0.5 //Min proton energy to transport
+#define MINPROTONENERGY 1.0 //Min proton energy to transport
 #define ZERO 1e-6
 #define MC 11177.928732 //carbon mass in MeV
 #define CC 6.0000 //carbon charge

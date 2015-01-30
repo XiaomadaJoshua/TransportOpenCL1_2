@@ -179,14 +179,33 @@ void Phantom::output(OpenCLStuff & stuff, std::string & outDir){
 		primaryFluence[i] = dose[i].s[1];
 		secondaryFluence[i] = dose[i].s[2];
 		ofsTotal << totalDose[i] << '\t';
-		if ((i + 1) % size.s[0] == 0)
+		ofsPF << primaryFluence[i] << '\t';
+		ofsSF << secondaryFluence[i] << '\t';
+		if ((i + 1) % size.s[0] == 0){
 			ofsTotal << '\n';
-		if ((i + 1) % (size.s[0] * size.s[1]) == 0)
+			ofsPF << '\n';
+			ofsSF << '\n';
+		}
+
+		if ((i + 1) % (size.s[0] * size.s[1]) == 0){
 			ofsTotal << '\n';
+			ofsPF << '\n';
+			ofsSF << '\n';
+		}
 	}
 	ofsTotal.close();
+	ofsPF.close();
+	ofsSF.close();
 
 	ofsTotal.open(fileTotalBin, std::fstream::out | std::fstream::trunc | std::fstream::binary);
 	ofsTotal.write((const char *)(totalDose), nVoxels * sizeof(cl_float) / sizeof(char));
 	ofsTotal.close();
+
+	ofsPF.open(filePFBin, std::fstream::out | std::fstream::trunc | std::fstream::binary);
+	ofsPF.write((const char *)(primaryFluence), nVoxels * sizeof(cl_float) / sizeof(char));
+	ofsPF.close();
+
+	ofsSF.open(fileSFBin, std::fstream::out | std::fstream::trunc | std::fstream::binary);
+	ofsSF.write((const char *)(secondaryFluence), nVoxels * sizeof(cl_float) / sizeof(char));
+	ofsSF.close();
 }

@@ -20,6 +20,7 @@ class ParticleStatus
 public:
 	ParticleStatus();
 	ParticleStatus(OpenCLStuff & stuff, cl_float T, cl_float2 width, cl_float3 sourceCenter_, cl_ulong nParticles_);
+	void buildProgram(OpenCLStuff & stuff);
 	void load(OpenCLStuff & stuff, cl_ulong nParticles, cl_float T, cl_float2 width, cl_float3 sourceCenter, cl_float mass, cl_float charge);
 	~ParticleStatus();
 	cl::Buffer & currentBeam() { return particleStatus[0]; }

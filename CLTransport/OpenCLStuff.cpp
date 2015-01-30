@@ -15,11 +15,16 @@ OpenCLStuff::OpenCLStuff()
 	context = cl::Context(device);
 	queue = cl::CommandQueue(context, device);
 	int err;
+
+	int cockFrequency;
 	err = device.getInfo(CL_DEVICE_MAX_COMPUTE_UNITS, &maxComputeUnits);
 	err = device.getInfo(CL_DEVICE_MAX_WORK_GROUP_SIZE, &maxWorkGroupSize);
 	err = device.getInfo(CL_DEVICE_MAX_WORK_ITEM_SIZES, &maxWorkItemSizes);
 	err = device.getInfo(CL_DEVICE_MAX_MEM_ALLOC_SIZE, &globalMemSize);
 //	err = device.getInfo(CL_DEVICE_GLOBAL_MEM_SIZE, &globalMemSize);
+	err = device.getInfo(CL_DEVICE_MAX_CLOCK_FREQUENCY, &cockFrequency);
+
+	
 }
 
 cl_uint OpenCLStuff::nBatch(){ 

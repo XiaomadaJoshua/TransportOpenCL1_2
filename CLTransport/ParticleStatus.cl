@@ -15,17 +15,17 @@ __kernel void initParticles(__global PS * particle, float T, float2 width, float
 		int size = sizeof(PS);
 		printf("size of PS: %d\n", size);
 	}*/
-	particle[gid].pos.y = -distance(sourceCenter, (float3)(0.0f, 0.0f, 0.0f));
+	particle[gid].pos.z = -distance(sourceCenter, (float3)(0.0f, 0.0f, 0.0f));
 	int iseed[2];
 	iseed[0] = randSeed;
 	iseed[1] = gid;
 	MTrng(iseed);
 	particle[gid].pos.x = (MTrng(iseed) - 0.5f) * width.x;
-	particle[gid].pos.z = (MTrng(iseed) - 0.5f) * width.y;
+	particle[gid].pos.y = (MTrng(iseed) - 0.5f) * width.y;
 
 	particle[gid].dir.x = 0.0f;
-	particle[gid].dir.y = 1.0f;
-	particle[gid].dir.z = 0.0f;
+	particle[gid].dir.y = 0.0f;
+	particle[gid].dir.z = 1.0f;
 
 	particle[gid].energy = T;
 	particle[gid].maxSigma = 0.0f;
@@ -175,11 +175,17 @@ float3 transform(float3 dir, float theta, float phi){
 		float u, v, w;
 		u = dir.x*cos(theta) + sin(theta)*(dir.x*dir.z*cos(phi) - dir.y*sin(phi)) / sqrt(1.0 - dir.z*dir.z);
 		v = dir.y*cos(theta) + sin(theta)*(dir.y*dir.z*cos(phi) + dir.x*sin(phi)) / sqrt(1.0 - dir.z*dir.z);
-		w = dir.z*cos(theta) - sqrt(1 - dir.z*dir.z)*sin(theta)*cos(phi);
+		w = dir.z*cos(theta) - sqrt(1.0f - dir.z*dir.z)*sin(theta)*cos(phi);
 		dir.x = u;
 		dir.y = v;
 		dir.z = w;
 	}
+	
+	if(any(isnan(dir))){
+		printf("transform result: %v3f\n", dir);
+		printf("theta %f, phi %f\n", theta, phi);
+	}
+
 	// if norm does not equal to 1
 	return normalize(dir);
 }
@@ -230,41 +236,64 @@ inline void atomicAdd(volatile global float * source, const float operand) {
 		newVal.floatVal = prevVal.floatVal + operand;
 	} while (atomic_cmpxchg((volatile global unsigned int *)source, prevVal.intVal, newVal.intVal) != prevVal.intVal);
 
-//	if(operand == NAN || operand > INF)
-//		printf("error in atomicAdd\n");
 }
 
 	// 0 in float8 is total dose, 1 in float8 is primary fluence, 2 in float8 is secondary fluence, 3 in float8 is primary LET, 4 in float8 is secondary LET, 5 in float8 is primary dose,
 	// 6 in float8 is secondary dose, 7 in float8 is heavy dose.
 void score(global float8 * doseCounter, int absIndex, float energyTransfer, float stepLength, int ifPrimary){
-	atomicAdd(&doseCounter[absIndex].s0, energyTransfer);
+	volatile global float * counter = &doseCounter[absIndex];
+	atomicAdd(counter, energyTransfer);
 	if(ifPrimary == 1){
-		atomicAdd(&doseCounter[absIndex].s1, 1);
-		atomicAdd(&doseCounter[absIndex].s3, energyTransfer*energyTransfer/stepLength);
-		atomicAdd(&doseCounter[absIndex].s5, energyTransfer);
+		atomicAdd(counter + 5, energyTransfer);
+		if(stepLength > 0)
+			atomicAdd(counter + 3, energyTransfer*energyTransfer/stepLength);
 	}
 	else{
-		atomicAdd(&doseCounter[absIndex].s2, 1);
-		atomicAdd(&doseCounter[absIndex].s4, energyTransfer*energyTransfer/stepLength);
-		atomicAdd(&doseCounter[absIndex].s6, energyTransfer);
+		atomicAdd(counter + 6, energyTransfer);
+		if(stepLength > 0)
+			atomicAdd(counter + 4, energyTransfer*energyTransfer/stepLength);
 	}
+}
 
-
+void scoreFluence(global float8 * doseCounter, int absIndex, int ifPrimary, float fluence){
+	volatile global float * counter = &doseCounter[absIndex];
+	if(ifPrimary == 1)
+		atomicAdd(counter + 1, fluence);
+	else
+		atomicAdd(counter + 2, fluence);
 }
 
 void scoreHeavy(global float8 * doseCounter, int absIndex, float energyTransfer){
-	atomicAdd(&doseCounter[absIndex].s0, energyTransfer);
-	atomicAdd(&doseCounter[absIndex].s7, energyTransfer);
+	volatile global float * counter = &doseCounter[absIndex];
+	atomicAdd(counter, energyTransfer);
+	atomicAdd(counter + 7, energyTransfer);
 }
 
-void store(PS * newOne, __global PS * secondary, volatile __global uint * nSecondary){
+void getMutex(global int * mutex){
+	int occupied = atomic_xchg(mutex, 1);
+	while(occupied > 0){
+		occupied = atomic_xchg(mutex, 1);
+	}
+}
+
+void releaseMutex(global int * mutex){
+	int prevVal = atomic_xchg(mutex, 0);
+}
+
+void store(PS * newOne, __global PS * secondary, volatile __global uint * nSecondary, global int * mutex2Secondary){
 	if(*nSecondary == 0){
 		printf("\n secondary particle overflow!!!\n");
 		return;	
 	}
-	atomic_dec(nSecondary);
-//	printf("store to # %d\n", *nSecondary);
-	secondary[*nSecondary] = *newOne;
+	
+//	getMutex(mutex2Secondary);
+	uint ind = atomic_dec(nSecondary);
+	secondary[ind-1] = *newOne;
+//	releaseMutex(mutex2Secondary);
+
+	printf("store to # %d\n", *nSecondary);
+	printf("stored proton status: energy %f, pos %v3f, dir %v3f, ifPrimary %d, mass %f, charge %f, maxSigma %f\n", newOne->energy, newOne->pos, newOne->dir, newOne->ifPrimary, newOne->mass, newOne->charge, newOne->maxSigma);
+
 }
 
 
@@ -288,7 +317,7 @@ void ionization(PS * thisOne, global float8 * doseCounter, int absIndex, int * i
 
 }
 
-void PPElastic(PS * thisOne, __global PS * secondary, volatile __global uint * nSecondary, int * iseed){
+void PPElastic(PS * thisOne, __global PS * secondary, volatile __global uint * nSecondary, int * iseed, global int * mutex2Secondary){
 
 	// sample energy transferred
 	float energyTransfer = 0.5 * thisOne->energy * MTrng(iseed);
@@ -297,6 +326,10 @@ void PPElastic(PS * thisOne, __global PS * secondary, volatile __global uint * n
 	float temp2 = (thisOne->energy - energyTransfer)*(thisOne->energy - energyTransfer + 2.0*thisOne->mass);
 	float costhe = (temp1 + temp2 - energyTransfer*(energyTransfer + 2.0*thisOne->mass))/2.0/sqrt(temp1*temp2);
 	float theta = acos(costhe);
+
+//	if(isnan(theta))
+//		printf("nan from PPE\n");
+
 	float phi = 2*PI*MTrng(iseed);
 	update(thisOne, 0.0f, energyTransfer, theta, phi, 0);
 
@@ -306,8 +339,12 @@ void PPElastic(PS * thisOne, __global PS * secondary, volatile __global uint * n
 	PS newOne = *thisOne;
 	newOne.energy = energyTransfer;
 	newOne.ifPrimary = 0;
+
+//	if(isnan(acos(temp1)))
+//		printf("nan from PPE\n");
+
 	update(&newOne, 0.0f, 0.0f, acos(temp1), phi+PI, 0);
-	store(&newOne, secondary, nSecondary);
+	store(&newOne, secondary, nSecondary, mutex2Secondary);
 }
 
 void POElastic(PS * thisOne, global float8 * doseCounter, int absIndex, int * iseed){
@@ -331,7 +368,7 @@ void POElastic(PS * thisOne, global float8 * doseCounter, int absIndex, int * is
 	scoreHeavy(doseCounter, absIndex, energyTransfer);
 }
 
-void POInelastic(PS * thisOne, __global PS * secondary, volatile __global uint * nSecondary, global float8 * doseCounter, int absIndex, int * iseed){
+void POInelastic(PS * thisOne, __global PS * secondary, volatile __global uint * nSecondary, global float8 * doseCounter, int absIndex, int * iseed, global int * mutex2Secondary){
 	float rand = MTrng(iseed);
 
 	float bindEnergy = EBIND;
@@ -355,11 +392,15 @@ void POInelastic(PS * thisOne, __global PS * secondary, volatile __global uint *
 			PS newOne = *thisOne;
 			newOne.energy = energy2SecondParticle;
 			newOne.ifPrimary = 0;
-			float costhe = (2.0f - 2.0f*energy2SecondParticle/remainEnergy)*MTrng(iseed) + 2.0f*energy2SecondParticle/remainEnergy - 1.0f;
+			float costhe = 1.0f - 2.0f*energy2SecondParticle*MTrng(iseed)/thisOne->energy;
 			float theta = acos(costhe);
 			float phi = 2.0f*PI*MTrng(iseed);
 			update(&newOne, 0.0f, 0.0f, theta, phi, 0);
-			store(&newOne, secondary, nSecondary);
+
+			if(isnan(theta))
+				printf("nan from POI, cosine theta is %f\n", costhe);
+
+			store(&newOne, secondary, nSecondary, mutex2Secondary);
 		}
 
 		else if(rand < 0.67450f)//short range energy
@@ -372,7 +413,7 @@ void POInelastic(PS * thisOne, __global PS * secondary, volatile __global uint *
 }
 
 void hardEvent(PS * thisOne, float stepLength, float4 vox, read_only image1d_t MCS, global float8 * doseCounter, int absIndex, global PS * secondary, volatile __global uint * nSecondary, 
-				int * iseed){
+				int * iseed, global int * mutex2Secondary){
 	sampler_t sampler = CLK_NORMALIZED_COORDS_FALSE | CLK_ADDRESS_CLAMP_TO_EDGE | CLK_FILTER_LINEAR;
 	float4 mcs = read_imagef(MCS, sampler, thisOne->energy/0.5f - 0.5f);
 	float sigIon = mcs.s0*vox.s3;
@@ -387,7 +428,7 @@ void hardEvent(PS * thisOne, float stepLength, float4 vox, read_only image1d_t M
 		return;
 	}
 	else if(rand < sigIon + sigPPE){
-		PPElastic(thisOne, secondary, nSecondary, iseed);
+		PPElastic(thisOne, secondary, nSecondary, iseed, mutex2Secondary);
 		return;
 	}
 	else if(rand < sigIon + sigPPE + sigPOE){
@@ -395,7 +436,7 @@ void hardEvent(PS * thisOne, float stepLength, float4 vox, read_only image1d_t M
 		return;
 	}
 	else if(rand < sigIon+sigPPE + sigPOE + sigPOI){
-		POInelastic(thisOne, secondary, nSecondary, doseCounter, absIndex, iseed);
+		POInelastic(thisOne, secondary, nSecondary, doseCounter, absIndex, iseed, mutex2Secondary);
 		return;
 	}
 }
@@ -403,13 +444,19 @@ void hardEvent(PS * thisOne, float stepLength, float4 vox, read_only image1d_t M
 
 __kernel void propagate(__global PS * particle, __global float8 * doseCounter, 
 		__read_only image3d_t voxels, float3 voxSize, __read_only image1d_t MCS, __read_only image1d_t RSPW, 
-		__read_only image2d_t MSPR, __global PS * secondary, volatile __global uint * nSecondary, int randSeed){
+		__read_only image2d_t MSPR, __global PS * secondary, volatile __global uint * nSecondary, int randSeed, __global int * mutex2Secondary){
 
 	size_t gid = get_global_id(0);
 	PS thisOne = particle[gid];
+	
+	if(thisOne.ifPrimary == 0){
+//		printf("simulate secondary proton\n");
+		printf("simulated proton status: energy %f, pos %v3f, dir %v3f, ifPrimary %d, mass %f, charge %f, maxSigma %f\n", thisOne.energy, thisOne.pos, thisOne.dir, thisOne.ifPrimary, thisOne.mass, thisOne.charge, thisOne.maxSigma);
+	}
+
 	int3 phantomSize = (int3)(get_image_width(voxels), get_image_height(voxels), get_image_depth(voxels));
 
-	float stepLength, stepInWater, thisMaxStep, step2bound, energyTransfer, sigma1, sigma2, sigma, sampledStep, variance, theta, phi;
+	float stepLength, stepInWater, thisMaxStep, step2bound, energyTransfer, sigma1, sigma2, sigma, sampledStep, variance, theta, phi, fluence;
 	float3 voxIndex;
 	int absIndex, crossBound;
 	int iseed[2];
@@ -424,14 +471,22 @@ __kernel void propagate(__global PS * particle, __global float8 * doseCounter,
 
 	while (ifInsidePhantom(thisOne.pos, voxSize, phantomSize)){
 		step++;
-		voxIndex = thisOne.pos / voxSize + convert_float3(phantomSize) / 2.0f;
+		voxIndex = thisOne.pos / voxSize + convert_float3(phantomSize)*0.5f;
 		absIndex = convert_int_rtn(voxIndex.x) + convert_int_rtn(voxIndex.y)*phantomSize.x + convert_int_rtn(voxIndex.z)*phantomSize.x*phantomSize.y;
 		vox = read_imagef(voxels, voxSampler, (float4)(voxIndex, 0.0f));
+/*		if(absIndex != absIndex2){
+			absIndex = absIndex2;
+			scoreFluence(doseCounter, absIndex, thisOne.ifPrimary);
+		}*/
+
+//		printf("voxSize %v3f, position %v3f, energy %f, voxel %v3f, abs voxel %d\n", voxSize, thisOne.pos, thisOne.energy, voxIndex, absIndex);
 
 		if (thisOne.energy <= MINPROTONENERGY){
 			stepInWater = thisOne.energy / read_imagef(RSPW, dataSampler, thisOne.energy/0.5f - 0.5f).s0;
 			stepLength = stepInWater*WATERDENSITY / vox.s2 / read_imagef(MSPR, dataSampler, (float2)(thisOne.energy - 0.5f, vox.s1 + 0.5f)).s0;
 			score(doseCounter, absIndex, thisOne.energy, stepLength, thisOne.ifPrimary);
+			fluence = stepLength/(voxSize.x*voxSize.y*voxSize.z);
+			scoreFluence(doseCounter, absIndex, thisOne.ifPrimary, fluence);
 			return;
 		}
 
@@ -464,6 +519,8 @@ __kernel void propagate(__global PS * particle, __global float8 * doseCounter,
 			crossBound = 0;
 		}
 
+//		printf("sample step: if crossBound %d, steplength %f\n", crossBound, stepLength);
+
 		// get energy transferred (plus energy straggling) in this sampled step
 		energyTransfer = energyInOneStep(vox, &thisOne, RSPW, MSPR, stepLength);
 		variance = TWOPIRE2MENEW*vox.s3*stepLength*thisOne.charge*thisOne.charge*fmin(MINELECTRONENERGY, maxDeltaElectronEnergy(&thisOne))*(1.0f / (beta(&thisOne)*beta(&thisOne)) - 0.5f);
@@ -480,12 +537,14 @@ __kernel void propagate(__global PS * particle, __global float8 * doseCounter,
 		thisOne.maxSigma = sigma;
 		update(&thisOne, stepLength, energyTransfer, theta, phi, crossBound);
 		score(doseCounter, absIndex, energyTransfer, stepLength, thisOne.ifPrimary);
+		fluence = stepLength/(voxSize.x*voxSize.y*voxSize.z);
+		scoreFluence(doseCounter, absIndex, thisOne.ifPrimary, fluence);
 
 		//hard event
 		if(!ifHard)
 			continue;
 
-		hardEvent(&thisOne, stepLength, vox, MCS, doseCounter, absIndex, secondary, nSecondary, iseed);
+		hardEvent(&thisOne, stepLength, vox, MCS, doseCounter, absIndex, secondary, nSecondary, iseed, mutex2Secondary);
 
 	}
 	
