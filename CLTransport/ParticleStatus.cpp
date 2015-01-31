@@ -18,6 +18,7 @@ ParticleStatus::ParticleStatus(OpenCLStuff & stuff, cl_float T, cl_float2 width_
 }
 
 void ParticleStatus::buildProgram(OpenCLStuff & stuff){
+
 	std::string source;
 	OpenCLStuff::convertToString("ParticleStatus.cl", source);
 	int err;

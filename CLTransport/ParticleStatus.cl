@@ -176,6 +176,7 @@ float3 transform(float3 dir, float theta, float phi){
 		u = dir.x*cos(theta) + sin(theta)*(dir.x*dir.z*cos(phi) - dir.y*sin(phi)) / sqrt(1.0 - dir.z*dir.z);
 		v = dir.y*cos(theta) + sin(theta)*(dir.y*dir.z*cos(phi) + dir.x*sin(phi)) / sqrt(1.0 - dir.z*dir.z);
 		w = dir.z*cos(theta) - sqrt(1.0f - dir.z*dir.z)*sin(theta)*cos(phi);
+
 		dir.x = u;
 		dir.y = v;
 		dir.z = w;
@@ -369,6 +370,7 @@ void POElastic(PS * thisOne, global float8 * doseCounter, int absIndex, int * is
 }
 
 void POInelastic(PS * thisOne, __global PS * secondary, volatile __global uint * nSecondary, global float8 * doseCounter, int absIndex, int * iseed, global int * mutex2Secondary){
+
 	float rand = MTrng(iseed);
 
 	float bindEnergy = EBIND;
@@ -481,6 +483,7 @@ __kernel void propagate(__global PS * particle, __global float8 * doseCounter,
 
 //		printf("voxSize %v3f, position %v3f, energy %f, voxel %v3f, abs voxel %d\n", voxSize, thisOne.pos, thisOne.energy, voxIndex, absIndex);
 
+
 		if (thisOne.energy <= MINPROTONENERGY){
 			stepInWater = thisOne.energy / read_imagef(RSPW, dataSampler, thisOne.energy/0.5f - 0.5f).s0;
 			stepLength = stepInWater*WATERDENSITY / vox.s2 / read_imagef(MSPR, dataSampler, (float2)(thisOne.energy - 0.5f, vox.s1 + 0.5f)).s0;
@@ -545,6 +548,7 @@ __kernel void propagate(__global PS * particle, __global float8 * doseCounter,
 			continue;
 
 		hardEvent(&thisOne, stepLength, vox, MCS, doseCounter, absIndex, secondary, nSecondary, iseed, mutex2Secondary);
+
 
 	}
 	

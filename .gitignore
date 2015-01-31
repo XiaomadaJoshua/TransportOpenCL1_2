@@ -7,6 +7,9 @@
 *.userosscache
 *.sln.docstates
 
+CLTransport/debug.txt
+CLTransport/Output/
+
 # Build results
 [Dd]ebug/
 [Dd]ebugPublic/
