@@ -35,7 +35,6 @@ public:
 
 protected:
 	std::vector<cl::Buffer> particleStatus;
-	std::vector<cl::Kernel> particleKernels;
 	cl::Program program;
 	cl::NDRange globalRange;
 

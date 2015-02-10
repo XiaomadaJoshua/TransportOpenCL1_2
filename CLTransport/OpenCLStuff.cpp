@@ -29,7 +29,7 @@ OpenCLStuff::OpenCLStuff()
 }
 
 cl_uint OpenCLStuff::nBatch(){ 
-	return globalMemSize / (sizeof(PS)*10); 
+	return globalMemSize / (sizeof(PS)*SECONDARYNUMBERRATIO*2);
 }
 
 

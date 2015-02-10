@@ -9,8 +9,8 @@ Secondary::Secondary(OpenCLStuff & stuff)
 	size = SECONDARYNUMBERRATIO * stuff.nBatch();
 	int err;
 	particleStatus.push_back(cl::Buffer(stuff.context, CL_MEM_READ_WRITE, sizeof(PS)*size, NULL, &err));
-	nSecondary = cl::Buffer(stuff.context, CL_MEM_READ_WRITE, sizeof(cl_uint));
-	stuff.queue.enqueueWriteBuffer(nSecondary, CL_TRUE, 0, sizeof(cl_int), &size);
+	nSecondary = cl::Buffer(stuff.context, CL_MEM_READ_WRITE, sizeof(cl_uint), NULL, &err);
+	err = stuff.queue.enqueueWriteBuffer(nSecondary, CL_TRUE, 0, sizeof(cl_int), &size);
 }
 
 void Secondary::propagate(OpenCLStuff & stuff, Phantom * phantom, MacroCrossSection * macroSigma,

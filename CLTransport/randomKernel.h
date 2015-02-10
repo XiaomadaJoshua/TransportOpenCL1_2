@@ -29,18 +29,23 @@ float inverseCumulativeNormal(float u){
 }
 
 float MTrng(int * iseed){
-	int I1 = iseed[0] / 53668;
-	iseed[0] = 40014 * (iseed[0] - I1 * 53668) - I1 * 12211;
-	if (iseed[0] < 0) iseed[0] = iseed[0] + 2147483563;
+	int I1, I2, IZ;
+	float returnValue;
+	do{
+		I1 = iseed[0] / 53668;
+		iseed[0] = 40014 * (iseed[0] - I1 * 53668) - I1 * 12211;
+		if (iseed[0] < 0) iseed[0] = iseed[0] + 2147483563;
 
-	int I2 = iseed[1] / 52774;
-	iseed[1] = 40692 * (iseed[1] - I2 * 52774) - I2 * 3791;
-	if (iseed[1] < 0) iseed[1] = iseed[1] + 2147483399;
+		I2 = iseed[1] / 52774;
+		iseed[1] = 40692 * (iseed[1] - I2 * 52774) - I2 * 3791;
+		if (iseed[1] < 0) iseed[1] = iseed[1] + 2147483399;
 
-	int IZ = iseed[0] - iseed[1];
-	if (IZ < 1) IZ = IZ + 2147483562;
+		IZ = iseed[0] - iseed[1];
+		if (IZ < 1) IZ = IZ + 2147483562;
+		returnValue = (float)(IZ*4.656612873077392578125e-10);
+	} while (returnValue <= 0.0 || returnValue >= 1.0);
 
-	return (float)(IZ*4.656612873077392578125e-10);
+	return returnValue;
 }
 
 float MTGaussian(int * iseed){

@@ -70,6 +70,8 @@ MCEngine::MCEngine(const char * file){
 	// output directory
 	ifs.getline(buff, 300);
 	getline(ifs, outDir);
+
+	ifs.close();
 }
 
 
@@ -78,6 +80,7 @@ void MCEngine::simulate(float minEnergy){
 		primary->reload(stuff);
 		primary->propagate(stuff, phantom, macroSigma, rspw, mspr, secondary);
 		secondary->propagate(stuff, phantom, macroSigma, rspw, mspr, secondary);
+
 	}
 	secondary->clear(stuff, phantom, macroSigma, rspw, mspr);
 	phantom->finalize(stuff);

@@ -20,6 +20,9 @@
 #define CC 6.0000 //carbon charge
 #define MINCARBONENERGY 5.0 //Min carbon energy to transport in MeV
 #define SECONDARYNUMBERRATIO 4 // ratio of nbatch over maxWorkGroupSize
+#define PPETHRESHOLD 12.0 // energy threshold of proton proton interaction
+#define POTHRESHOLD 7.0 // energy threshold of proton oxygen interaction
+#define NDOSECOUNTERS 10 // number of dosecounters
 
 #define MIN(a,b) (a > b ? b : a)
 #define MIN3(a,b,c) (a > b ? b : a) > c ? c : (a > b ? b : a);

@@ -25,6 +25,15 @@ private:
 	cl::Buffer doseCounter;
 	cl::Program program;
 
+	cl_float * totalDose;
+	cl_float * primaryFluence;
+	cl_float * secondaryFluence;
+	cl_float * primaryLET;
+	cl_float * secondaryLET;
+	cl_float * heavyDose;
+	cl_float * primaryDose;
+	cl_float * secondaryDose;
+
 
 	float ct2den(cl_float huValue) const;
 	cl_float setMaterial(cl_float huValue, const MSPR & massSPR) const;
