@@ -38,10 +38,7 @@ void ParticleStatus::load(OpenCLStuff & stuff, cl_ulong nParticles_, cl_float T,
 	int tempSize = sizeof(PS);
 	particleStatus.push_back(cl::Buffer(stuff.context, CL_MEM_READ_WRITE, sizeof(PS) * nParticles_, NULL, &err));
 
-	cl::make_kernel<cl::Buffer &, cl_float, cl_float2, cl_float3, cl_float, cl_float, cl_int> initParticlesKernel(program, "initParticles", &err);
-
-	PS * particleTest = new PS[nParticles_]();
-	err = stuff.queue.enqueueReadBuffer(particleStatus[0], CL_TRUE, 0, sizeof(PS) * nParticles_, particleTest);
+	cl::make_kernel<cl::Buffer &, cl_float, cl_float2, cl_float3, cl_float, cl_float, cl_int> initParticlesKernel(program, "initParticles");
 
 	globalRange = cl::NDRange(nParticles_);
 	cl::EnqueueArgs arg (stuff.queue, globalRange);
@@ -50,7 +47,8 @@ void ParticleStatus::load(OpenCLStuff & stuff, cl_ulong nParticles_, cl_float T,
 	initParticlesKernel(arg, particleStatus[0], T, width, sourceCenter_, mass, charge, randSeed);
 	stuff.queue.finish();
 
-
+	PS * particleTest = new PS[nParticles_]();
+	err = stuff.queue.enqueueReadBuffer(particleStatus[0], CL_TRUE, 0, sizeof(PS) * nParticles_, particleTest);
 }
 
 

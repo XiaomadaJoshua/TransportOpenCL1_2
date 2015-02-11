@@ -125,10 +125,26 @@ int test(){
 	return 0;
 }*/
 
-
+/*
 int main(){
 	int temp;
 	MCEngine mc("proton_config");
 	mc.simulate(MINPROTONENERGY);
 //	std::cin >> temp;
+}
+*/
+
+
+int main(){
+	OpenCLStuff stuff;
+	cl_float2 width;
+	cl_float3 center;
+	width.s[0] = 0;
+	width.s[1] = 0;
+	center.s[0] = 0;
+	center.s[1] = 0;
+	center.s[2] = 0;
+
+	Proton p(stuff, 2, 100, width, center);
+	p.reload(stuff);
 }

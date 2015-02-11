@@ -1,7 +1,7 @@
 #include "randomKernel.h"
 #include "Macro.h"
 
-typedef struct  __attribute__ ((packed)) ParticleStatus{
+typedef struct __attribute__ ((packed)) ParticleStatus{
 	float3 pos, dir;
 	float energy, maxSigma, mass, charge;
 	int ifPrimary;
@@ -11,7 +11,7 @@ typedef struct  __attribute__ ((packed)) ParticleStatus{
 __kernel void initParticles(__global PS * particle, float T, float2 width, float3 sourceCenter, float m, float c, int randSeed){
 	size_t gid = get_global_id(0);
 	
-	if(gid == 0){
+	if(gid == 1){
 		int size = sizeof(PS);
 		printf("size of PS: %d\n", size);
 	}
