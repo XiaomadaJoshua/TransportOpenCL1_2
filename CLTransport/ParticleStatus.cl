@@ -11,10 +11,10 @@ typedef struct __attribute__ ((packed)) ParticleStatus{
 __kernel void initParticles(__global PS * particle, float T, float2 width, float3 sourceCenter, float m, float c, int randSeed){
 	size_t gid = get_global_id(0);
 	
-	if(gid == 1){
-		int size = sizeof(PS);
-		printf("size of PS: %d\n", size);
-	}
+//	if(gid == 1){
+//		int size = sizeof(PS);
+//		printf("size of PS: %d\n", size);
+//	}
 	particle[gid].pos.z = -distance(sourceCenter, (float3)(0.0f, 0.0f, 0.0f));
 	int iseed[2];
 	iseed[0] = randSeed;
@@ -274,7 +274,7 @@ void scoreFluence(global float8 * doseCounter, int absIndex, int nVoxels, int if
 	// choose a dose counter
 	int doseCounterId = convert_int_rtn(MTrng(iseed)*NDOSECOUNTERS);
 
-	getMutex(mutex);
+//	getMutex(mutex);
 	volatile global float * counter = &doseCounter[absIndex + doseCounterId * nVoxels];
 	if(ifPrimary == 1)
 		atomicAdd(counter + 1, fluence);
@@ -283,8 +283,8 @@ void scoreFluence(global float8 * doseCounter, int absIndex, int nVoxels, int if
 		atomicAdd(counter + 2, fluence);
 
 	if(absIndex == 25*51 + 25 && ifPrimary == 1)
-		printf("entrance fluence %f %f\n", fluence, *(counter+1));
-	releaseMutex(mutex);
+		printf("entrance fluence %f\n", fluence);
+//	releaseMutex(mutex);
 }
 
 void scoreHeavy(global float8 * doseCounter, int absIndex, int nVoxels, float energyTransfer, int * iseed){
@@ -380,8 +380,8 @@ void POElastic(PS * thisOne, global float8 * doseCounter, int absIndex, int nVox
 		printf("nan from POE\n");
 		printf("costhe %f\n", costhe);
 	}
-//	costhe = costhe > 1.0f ? 1.0f : costhe;
-//	costhe = costhe < -1.0f ? -1.0f : costhe;
+	costhe = costhe > 1.0f ? 1.0f : costhe;
+	costhe = costhe < -1.0f ? -1.0f : costhe;
 	float theta = acos(costhe);
 
 	float phi;

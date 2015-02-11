@@ -47,7 +47,7 @@ Phantom::Phantom(OpenCLStuff & stuff, cl_float3 voxSize_, cl_int3 size_, const D
 	cl::NDRange globalRange(nVoxel*NDOSECOUNTERS);
 	cl::EnqueueArgs arg(stuff.queue, globalRange);
 	initDoseCounterKernel(arg, doseCounter);
-	err = stuff.queue.finish();
+//	err = stuff.queue.finish();
 }
 
 

@@ -32,7 +32,7 @@ void ParticleStatus::buildProgram(OpenCLStuff & stuff){
 
 void ParticleStatus::load(OpenCLStuff & stuff, cl_ulong nParticles_, cl_float T, cl_float2 width, cl_float3 sourceCenter_, cl_float mass, cl_float charge)
 {
-	stuff.queue.finish();
+//	stuff.queue.finish();
 	particleStatus.clear();
 	int err;
 	int tempSize = sizeof(PS);
@@ -45,10 +45,10 @@ void ParticleStatus::load(OpenCLStuff & stuff, cl_ulong nParticles_, cl_float T,
 	srand((unsigned int)time(NULL));
 	cl_int randSeed = rand();
 	initParticlesKernel(arg, particleStatus[0], T, width, sourceCenter_, mass, charge, randSeed);
-	stuff.queue.finish();
+//	stuff.queue.finish();
 
-	PS * particleTest = new PS[nParticles_]();
-	err = stuff.queue.enqueueReadBuffer(particleStatus[0], CL_TRUE, 0, sizeof(PS) * nParticles_, particleTest);
+//	PS * particleTest = new PS[nParticles_]();
+//	err = stuff.queue.enqueueReadBuffer(particleStatus[0], CL_TRUE, 0, sizeof(PS) * nParticles_, particleTest);
 }
 
 
