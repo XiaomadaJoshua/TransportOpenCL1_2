@@ -74,19 +74,6 @@ void ParticleStatus::propagate(OpenCLStuff & stuff, Phantom * phantom, MacroCros
 	RSPW * resStpPowWater, MSPR * massStpPowRatio, ParticleStatus * secondary){
 	int err;
 	cl::EnqueueArgs arg(stuff.queue, globalRange);
-	/*
-	particleKernels[1].setArg(0, particleStatus[0]);
-	particleKernels[1].setArg(1, phantom->doseCounterGPU());
-	particleKernels[1].setArg(2, phantom->voxelGPU());
-	particleKernels[1].setArg(3, phantom->voxelSize());
-	particleKernels[1].setArg(4, macroSigma->gpu());
-	particleKernels[1].setArg(5, resStpPowWater->gpu());
-	particleKernels[1].setArg(6, massStpPowRatio->gpu());
-	particleKernels[1].setArg(7, secondary->particleStatus[0]);
-	particleKernels[1].setArg(8, randSeed);
-
-	stuff.queue.enqueueNDRangeKernel(particleKernels[1], 0, globalRange);
-	*/
 	
 	cl::make_kernel < cl::Buffer &, cl::Buffer &, cl::Image3D &, cl_float3, cl::Image1D &, cl::Image1D &, cl::Image2D &, cl::Buffer &, cl::Buffer &, cl_int, cl::Buffer &> propagateKernel(program, "propagate", &err);
 

@@ -14,6 +14,7 @@ public:
 	cl_float3 voxelSize() const { return voxSize; }
 	void finalize(OpenCLStuff & stuff);
 	void output(OpenCLStuff & stuff, std::string & outDir);
+	void tempStore(OpenCLStuff & stuff);
 
 private:
 	cl_float3 voxSize;
@@ -34,6 +35,7 @@ private:
 	cl_float * primaryDose;
 	cl_float * secondaryDose;
 
+	cl::Buffer doseBuff;
 
 	float ct2den(cl_float huValue) const;
 	cl_float setMaterial(cl_float huValue, const MSPR & massSPR) const;

@@ -1,5 +1,6 @@
 #include "MCEngine.h"
 #include <fstream>
+#include <iostream>
 #include <string>
 #include "Macro.h"
 #include "MacroCrossSection.h"
@@ -76,15 +77,20 @@ MCEngine::MCEngine(const char * file){
 
 
 void MCEngine::simulate(float minEnergy){
+	int i = 0;
 	while (primary->nParticlesLeft() != 0){
 		primary->reload(stuff);
 		primary->propagate(stuff, phantom, macroSigma, rspw, mspr, secondary);
 		secondary->propagate(stuff, phantom, macroSigma, rspw, mspr, secondary);
-
+		phantom->tempStore(stuff);
+		i++;
 	}
 	secondary->clear(stuff, phantom, macroSigma, rspw, mspr);
+	phantom->tempStore(stuff);
 	phantom->finalize(stuff);
 	phantom->output(stuff, outDir);
+
+	std::cout << "number of batches: " << i << std::endl;
 }
 
 

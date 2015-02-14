@@ -156,8 +156,9 @@ float radiationLength(float4 vox)
 	return WATERDENSITY*XW / (ratio*vox.s2);
 }
 
-float3 transform(float3 dir, float theta, float phi){
+/*float3 transform(float3 dir, float theta, float phi){
 	// if original direction is along z-axis
+	printf("direction before transform %v3f\n", dir);
 	float temp = 1.0 - ZERO;
 	if (dir.z*dir.z >= temp){
 		if (dir.z > 0){
@@ -186,9 +187,51 @@ float3 transform(float3 dir, float theta, float phi){
 		printf("transform result: %v3f\n", dir);
 		printf("theta %f, phi %f\n", theta, phi);
 	}
+	printf("direction after transform %v3f\n", dir);
 
+	dir = normalize(dir);
+	printf("direction after normalization %v3f\n", dir);
 	// if norm does not equal to 1
 	return normalize(dir);
+
+}*/
+
+void transform(float3 * dir, float theta, float phi){
+	// if original direction is along z-axis
+//	printf("direction before transform %f %f %f\n", (*dir).x, (*dir).y, (*dir).z);
+	float temp = 1.0 - ZERO;
+	if ((*dir).z*(*dir).z >= temp){
+		if ((*dir).z > 0){
+			(*dir).x = sin(theta)*cos(phi);
+			(*dir).y = sin(theta)*sin(phi);
+			(*dir).z = cos(theta);
+		}
+		else{
+			(*dir).x = -sin(theta)*cos(phi);
+			(*dir).y = -sin(theta)*sin(phi);
+			(*dir).z = -cos(theta);
+		}
+	}
+	else{
+		float u, v, w;
+		u = (*dir).x*cos(theta) + sin(theta)*((*dir).x*(*dir).z*cos(phi) - (*dir).y*sin(phi)) / sqrt(1.0 - (*dir).z*(*dir).z);
+		v = (*dir).y*cos(theta) + sin(theta)*((*dir).y*(*dir).z*cos(phi) + (*dir).x*sin(phi)) / sqrt(1.0 - (*dir).z*(*dir).z);
+		w = (*dir).z*cos(theta) - sqrt(1.0f - (*dir).z*(*dir).z)*sin(theta)*cos(phi);
+
+		(*dir).x = u;
+		(*dir).y = v;
+		(*dir).z = w;
+	}
+	
+	if(any(isnan(*dir))){
+		printf("transform result: %v3f\n", *dir);
+		printf("theta %f, phi %f\n", theta, phi);
+	}
+//	printf("direction after transform %f %f %f\n", (*dir).x, (*dir).y, (*dir).z);
+
+	*dir = normalize(*dir);
+//	printf("direction after normalization %f %f %f\n", (*dir).x, (*dir).y, (*dir).z);
+
 }
 
 float3 getMovement(float3 value, int crossBound){
@@ -215,11 +258,23 @@ float3 getMovement(float3 value, int crossBound){
 	return value;
 }
 
-inline void update(PS * thisOne, float stepLength, float energyTransfer, float theta, float phi, int crossBound){
-	float3 movement = getMovement(thisOne->dir*stepLength, crossBound);
+inline void update(PS * thisOne, float stepLength, float energyTransfer, float theta, float phi, int crossBound, float deflection){	
+//	printf("before update dir %f %f %f, pos %f %f %f\n", thisOne->dir.x, thisOne->dir.y, thisOne->dir.z, thisOne->pos.x, thisOne->pos.y, thisOne->pos.z);
+	
+	float3 movement = getMovement(thisOne->dir*stepLength, crossBound);	
+	if(ABS(deflection) > 0.0){
+		float3 n = thisOne->dir;
+		transform(&n, PI/2, 0.0f);
+//		if(ABS(dot(n, thisOne->dir)) > 100.0*ZERO)
+//			printf("error in deflection n: %f %f %f, dir: %f %f %f\n", n.x, n.y, n.z, thisOne->dir.x, thisOne->dir.y, thisOne->dir.z);
+		n = normalize(n)*deflection;
+		movement += n;
+	}
 	thisOne->pos += movement;
-	thisOne->dir = transform(thisOne->dir, theta, phi);
+	transform(&(thisOne->dir), theta, phi);
 	thisOne->energy -= energyTransfer;
+//	printf("after update dir %f %f %f, pos %f %f %f\n", thisOne->dir.x, thisOne->dir.y, thisOne->dir.z, thisOne->pos.x, thisOne->pos.y, thisOne->pos.z);
+
 }
 
 inline void atomicAdd(volatile global float * source, const float operand) {
@@ -282,8 +337,8 @@ void scoreFluence(global float8 * doseCounter, int absIndex, int nVoxels, int if
 	else
 		atomicAdd(counter + 2, fluence);
 
-	if(absIndex == 25*51 + 25 && ifPrimary == 1)
-		printf("entrance fluence %f\n", fluence);
+//	if(absIndex == 25*51 + 25 && ifPrimary == 1)
+//		printf("entrance fluence %f\n", fluence);
 //	releaseMutex(mutex);
 }
 
@@ -327,7 +382,7 @@ void ionization(PS * thisOne, global float8 * doseCounter, int absIndex, int nVo
 	}
 
 
-	update(thisOne, 0.0f, Te, 0.0f, 0.0f, 0);
+	update(thisOne, 0.0f, Te, 0.0f, 0.0f, 0, 0.0f);
 	score(doseCounter, absIndex, nVoxels, Te, stepLength, thisOne->ifPrimary, iseed);
 
 }
@@ -335,7 +390,7 @@ void ionization(PS * thisOne, global float8 * doseCounter, int absIndex, int nVo
 void PPElastic(PS * thisOne, __global PS * secondary, volatile __global uint * nSecondary, int * iseed, global int * mutex2Secondary){
 
 	// sample energy transferred
-	float energyTransfer = 0.5 * thisOne->energy * MTrng(iseed);
+	float energyTransfer = thisOne->energy * MTrng(iseed);
 	// sample incident proton deflection and update incident proton
 	float temp1 = thisOne->energy*(thisOne->energy + 2.0*thisOne->mass);
 	float temp2 = (thisOne->energy - energyTransfer)*(thisOne->energy - energyTransfer + 2.0*thisOne->mass);
@@ -346,7 +401,7 @@ void PPElastic(PS * thisOne, __global PS * secondary, volatile __global uint * n
 		printf("nan from PPE\n");
 
 	float phi = 2*PI*MTrng(iseed);
-	update(thisOne, 0.0f, energyTransfer, theta, phi, 0);
+	update(thisOne, 0.0f, energyTransfer, theta, phi, 0, 0.0f);
 
 	// compute angular deflection of recoil proton and store in secondary particle container
 	temp1 = (sqrt(temp1) - sqrt(temp2)*(costhe))/sqrt(energyTransfer*(energyTransfer + 2.0f*thisOne->mass));
@@ -358,17 +413,17 @@ void PPElastic(PS * thisOne, __global PS * secondary, volatile __global uint * n
 	if(isnan(acos(temp1)))
 		printf("nan from PPE with secondary proton\n");
 
-	update(&newOne, 0.0f, 0.0f, acos(temp1), phi+PI, 0);
+	update(&newOne, 0.0f, 0.0f, acos(temp1), phi+PI, 0, 0.0f);
 	store(&newOne, secondary, nSecondary, mutex2Secondary);
 }
 
 void POElastic(PS * thisOne, global float8 * doseCounter, int absIndex, int nVoxels, int * iseed){
 	// sample energy transferred to oxygen
 	float meanEnergy = 0.65f*exp(-0.0013f*thisOne->energy) - 0.71f*exp(-0.0177f*thisOne->energy);
-	meanEnergy = meanEnergy < 1.0f ? 1.0f : meanEnergy;
+//	meanEnergy = meanEnergy < 1.0f ? 1.0f : meanEnergy;
 	float energyTransfer;
 	do{
-		energyTransfer = MTExp(iseed, 1.0f/meanEnergy);
+		energyTransfer = MTExp(iseed, meanEnergy);
 	}while(energyTransfer > maxOxygenEnergy(thisOne));
 
 	// calculate theta, sample phi
@@ -387,7 +442,7 @@ void POElastic(PS * thisOne, global float8 * doseCounter, int absIndex, int nVox
 	float phi;
 	phi = MTrng(iseed)*2.0f*PI;
 
-	update(thisOne, 0.0f, energyTransfer, theta, phi, 0);
+	update(thisOne, 0.0f, energyTransfer, theta, phi, 0, 0.0f);
 	scoreHeavy(doseCounter, absIndex, nVoxels, energyTransfer, iseed);
 }
 
@@ -410,16 +465,17 @@ void POInelastic(PS * thisOne, __global PS * secondary, volatile __global uint *
 		remainEnergy -= bindEnergy;
 
 		float energy2SecondParticle = MTrng(iseed)*(remainEnergy - minEnergy) + minEnergy;
-		remainEnergy -= energy2SecondParticle;
 
-		if(rand < 0.50f){ //proton
+
+		if(rand < 0.45f){ //proton
 			PS newOne = *thisOne;
 			newOne.energy = energy2SecondParticle;
 			newOne.ifPrimary = 0;
-			float costhe = 1.0f - 2.0f*energy2SecondParticle*MTrng(iseed)/thisOne->energy;
+			float costhe = MTrng(iseed)*(2.0f - 2.0f*energy2SecondParticle/remainEnergy) + 2.0f*minEnergy/remainEnergy - 1.0f;
 			float theta = acos(costhe);
+
 			float phi = 2.0f*PI*MTrng(iseed);
-			update(&newOne, 0.0f, 0.0f, theta, phi, 0);
+			update(&newOne, 0.0f, 0.0f, theta, phi, 0, 0.0f);
 
 			if(isnan(theta))
 				printf("nan from POI, cosine theta is %f\n", costhe);
@@ -427,13 +483,14 @@ void POInelastic(PS * thisOne, __global PS * secondary, volatile __global uint *
 			store(&newOne, secondary, nSecondary, mutex2Secondary);
 		}
 
-		else if(rand < 0.67450f)//short range energy
+		else if(rand < 0.453f)//short range energy
 			energyDeposit += energy2SecondParticle;
 
-		bindEnergy *= 0.85f;
+		bindEnergy *= 0.5f;
+		remainEnergy -= energy2SecondParticle;
 	}
 	scoreHeavy(doseCounter, absIndex, nVoxels, energyDeposit, iseed);
-	update(thisOne, 0.0f, thisOne->energy, 0.0f, 0.0f, 0);
+	update(thisOne, 0.0f, thisOne->energy, 0.0f, 0.0f, 0, 0.0f);
 }
 
 void hardEvent(PS * thisOne, float stepLength, float4 vox, read_only image1d_t MCS, global float8 * doseCounter, int absIndex, int nVoxels, global PS * secondary, volatile __global uint * nSecondary, 
@@ -485,7 +542,7 @@ __kernel void propagate(__global PS * particle, __global float8 * doseCounter,
 	int3 phantomSize = (int3)(get_image_width(voxels), get_image_height(voxels), get_image_depth(voxels));
 	int nVoxels = phantomSize.x * phantomSize.y * phantomSize.z;
 
-	float stepLength, stepInWater, thisMaxStep, step2bound, energyTransfer, sigma1, sigma2, sigma, sampledStep, variance, theta, phi;
+	float stepLength, stepInWater, thisMaxStep, step2bound, energyTransfer, sigma1, sigma2, sigma, sampledStep, variance, theta0, theta, phi, deflection, z1, z2;
 	float3 voxIndex;
 	int absIndex, crossBound;
 	int iseed[2];
@@ -559,12 +616,16 @@ __kernel void propagate(__global PS * particle, __global float8 * doseCounter,
 
 
 		// deflection
-		variance = ES*ES*thisOne.charge*thisOne.charge*stepLength / (beta(&thisOne)*beta(&thisOne)*momentumSquare(&thisOne)*radiationLength(vox));
-		
-		theta = MTGaussian(iseed) * sqrt(variance);
+		z1 = MTGaussian(iseed);
+		z2 = MTGaussian(iseed);
+		theta0 = ES*thisOne.charge*sqrt(stepLength/radiationLength(vox))/beta(&thisOne)/sqrt(momentumSquare(&thisOne));
+		theta = z1 * theta0;
+		deflection = z1*stepLength*theta0/sqrt(12.0f) + z2*stepLength*theta0/2.0f;
+		deflection = ABS(deflection) < ZERO ? ZERO*deflection/ABS(deflection) : deflection;
+//		printf("deflection %f\n", deflection);
 		phi = 2.0f*PI*MTrng(iseed);
 		thisOne.maxSigma = sigma;
-		update(&thisOne, stepLength, energyTransfer, theta, phi, crossBound);
+		update(&thisOne, stepLength, energyTransfer, theta, phi, crossBound, deflection);
 		score(doseCounter, absIndex, nVoxels, energyTransfer, stepLength, thisOne.ifPrimary, iseed);
 		scoreFluence(doseCounter, absIndex, nVoxels, thisOne.ifPrimary, stepLength, mutex, iseed);
 

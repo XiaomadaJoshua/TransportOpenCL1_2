@@ -12,10 +12,10 @@ Phantom::Phantom(OpenCLStuff & stuff, cl_float3 voxSize_, cl_int3 size_, const D
 	cl::ImageFormat format(CL_RGBA, CL_FLOAT);
 	voxelAttributes = cl::Image3D(stuff.context, CL_MEM_READ_ONLY, format, size.s[0], size.s[1], size.s[2], 0, 0, NULL, &err);
 
-	int nVoxel = size.s[0] * size.s[1] * size.s[2];
+	int nVoxels = size.s[0] * size.s[1] * size.s[2];
 
-	attributes = new cl_float4[nVoxel];
-	for (int i = 0; i < nVoxel; i++){
+	attributes = new cl_float4[nVoxels];
+	for (int i = 0; i < nVoxels; i++){
 		attributes[i].s[0] = 0.0f; // ct value
 		attributes[i].s[1] = setMaterial(attributes[i].s[0], massSPR); // material number
 		attributes[i].s[2] = ct2den(attributes[i].s[0]); // density
@@ -34,7 +34,7 @@ Phantom::Phantom(OpenCLStuff & stuff, cl_float3 voxSize_, cl_int3 size_, const D
 
 	// 0 in float8 is total dose, 1 in float8 is primary fluence, 2 in float8 is secondary fluence, 3 in float8 is primary LET, 4 in float8 is secondary LET, 5 in float8 is primary dose,
 	// 6 in float8 is secondary dose, 7 in float8 is heavy dose.
-	doseCounter = cl::Buffer(stuff.context, CL_MEM_READ_WRITE, sizeof(cl_float8)*nVoxel*NDOSECOUNTERS, NULL, &err);
+	doseCounter = cl::Buffer(stuff.context, CL_MEM_READ_WRITE, sizeof(cl_float8)*nVoxels*NDOSECOUNTERS, NULL, &err);
 
 	std::string source;
 	OpenCLStuff::convertToString("Phantom.cl", source);
@@ -44,16 +44,29 @@ Phantom::Phantom(OpenCLStuff & stuff, cl_float3 voxSize_, cl_int3 size_, const D
 	info = program.getBuildInfo<CL_PROGRAM_BUILD_LOG>(stuff.device);
 	cl::make_kernel<cl::Buffer &> initDoseCounterKernel(program, "initializeDoseCounter", &err);
 
-	cl::NDRange globalRange(nVoxel*NDOSECOUNTERS);
+	cl::NDRange globalRange(nVoxels*NDOSECOUNTERS);
 	cl::EnqueueArgs arg(stuff.queue, globalRange);
 	initDoseCounterKernel(arg, doseCounter);
 //	err = stuff.queue.finish();
+
+	doseBuff = cl::Buffer(stuff.context, CL_MEM_READ_WRITE, sizeof(cl_float8)*nVoxels, NULL, &err);
+	globalRange = cl::NDRange(nVoxels);
+	cl::EnqueueArgs arg2(stuff.queue, globalRange);
+	initDoseCounterKernel(arg2, doseBuff);
 }
 
 
 Phantom::~Phantom()
 {
 	delete[] attributes;
+	delete[] totalDose;
+	delete[] primaryFluence;
+	delete[] secondaryFluence;
+	delete[] primaryLET;
+	delete[] secondaryLET;
+	delete[] heavyDose;
+	delete[] primaryDose;
+	delete[] secondaryDose;
 }
 
 
@@ -142,25 +155,17 @@ cl_float Phantom::ct2eden(cl_float material, cl_float density) const{
 }
 
 void Phantom::finalize(OpenCLStuff & stuff){
-
-	std::string source;
-	OpenCLStuff::convertToString("final.cl", source);
-	cl::Program programTemp(stuff.context, source);
-	programTemp.build("-cl-single-precision-constant");
-	std::string info;
-	info = programTemp.getBuildInfo<CL_PROGRAM_BUILD_LOG>(stuff.device);
-
 	cl::make_kernel<cl::Buffer &, cl::Image3D &, cl_float3> finalizeKernel(program, "finalize");
 	cl::NDRange globalRange(size.s[0], size.s[1], size.s[2]);
 	cl::EnqueueArgs arg(stuff.queue, globalRange);
-	finalizeKernel(arg, doseCounter, voxelAttributes, voxSize);
+	finalizeKernel(arg, doseBuff, voxelAttributes, voxSize);
 }
 
 void Phantom::output(OpenCLStuff & stuff, std::string & outDir){
 	int nVoxels = size.s[0] * size.s[1] * size.s[2];
 	cl_float8 * dose = new cl_float8[nVoxels];
 	stuff.queue.finish();
-	stuff.queue.enqueueReadBuffer(doseCounter, CL_TRUE, 0, sizeof(cl_float8) * nVoxels, dose);
+	stuff.queue.enqueueReadBuffer(doseBuff, CL_TRUE, 0, sizeof(cl_float8) * nVoxels, dose);
 
 	totalDose = new cl_float[nVoxels]();
 	primaryFluence = new cl_float[nVoxels]();
@@ -279,4 +284,11 @@ void Phantom::output(OpenCLStuff & stuff, std::string & outDir){
 	ofsSD.open(fileSDBin, std::fstream::out | std::fstream::trunc | std::fstream::binary);
 	ofsSD.write((const char *)(secondaryDose), nVoxels * sizeof(cl_float) / sizeof(char));
 	ofsSD.close();
+}
+
+void Phantom::tempStore(OpenCLStuff & stuff){
+	cl::make_kernel<cl::Buffer &, cl::Buffer &> tempStoreKernel(program, "tempStore");
+	cl::NDRange globalRange(size.s[0], size.s[1], size.s[2]);
+	cl::EnqueueArgs arg(stuff.queue, globalRange);
+	tempStoreKernel(arg, doseCounter, doseBuff);
 }

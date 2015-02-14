@@ -46,9 +46,9 @@ float MTGaussian(int * iseed){
 	return inverseCumulativeNormal(MTrng(iseed));
 }
 
-float MTExp(int * iseed, float p){
+float MTExp(int * iseed, float lambda){
 
-	return -log(1 - MTrng(iseed)) / p;
+	return -log(1 - MTrng(iseed))*lambda;
 }
 
 
