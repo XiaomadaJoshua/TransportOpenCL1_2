@@ -262,14 +262,14 @@ inline void update(PS * thisOne, float stepLength, float energyTransfer, float t
 //	printf("before update dir %f %f %f, pos %f %f %f\n", thisOne->dir.x, thisOne->dir.y, thisOne->dir.z, thisOne->pos.x, thisOne->pos.y, thisOne->pos.z);
 	
 	float3 movement = getMovement(thisOne->dir*stepLength, crossBound);	
-	if(ABS(deflection) > 0.0){
+/*	if(ABS(deflection) > 0.0){
 		float3 n = thisOne->dir;
 		transform(&n, PI/2, 0.0f);
 //		if(ABS(dot(n, thisOne->dir)) > 100.0*ZERO)
 //			printf("error in deflection n: %f %f %f, dir: %f %f %f\n", n.x, n.y, n.z, thisOne->dir.x, thisOne->dir.y, thisOne->dir.z);
 		n = normalize(n)*deflection;
 		movement += n;
-	}
+	}*/
 	thisOne->pos += movement;
 	transform(&(thisOne->dir), theta, phi);
 	thisOne->energy -= energyTransfer;
