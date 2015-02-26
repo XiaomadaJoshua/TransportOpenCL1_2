@@ -388,32 +388,49 @@ void ionization(PS * thisOne, global float8 * doseCounter, int absIndex, int nVo
 }
 
 void PPElastic(PS * thisOne, __global PS * secondary, volatile __global uint * nSecondary, int * iseed, global int * mutex2Secondary){
+	// new sampling method used 
+	// dsigma/dt = exp(14.5t) + 1.4exp(10t)
+	// first sample invariant momentum transfer t
+	float m = MP;
+	float E1 = thisOne->energy + m;
+	float p1 = sqrt(E1*E1 - m*m);
+	float beta = p1/(E1 + MP);//lorentz factor to CMS frame
+	float gamma = 1.0f/sqrt(1 - beta*beta);
+	float p1CMS = p1*gamma - beta*gamma*E1;
+	float t, xi;
+	do{
+		t = MTrng(iseed)*(-4.0f)*p1CMS*p1CMS;
+		xi = MTrng(iseed)*2.4f;
+	}while(xi > exp(14.5f*t*1e-6) + 1.4*exp(10.0f*t*1e-6));
+	//calculate theta and energy transfer in lab system
+	float E4 = (2.0f*m*m - t)/(2.0f*m);
+	float energyTransfer = E4 - m;
+	float E3 = E1 + m - E4;
+	float p4 = sqrt(E4*E4 - m*m);
+	float p3 = sqrt(E3*E3 - m*m);
+	float costhe = (t - 2.0f*m*m + 2.0f*E1*E3)/(2*p1*p3);
 
-	// sample energy transferred
-	float energyTransfer = thisOne->energy * MTrng(iseed);
-	// sample incident proton deflection and update incident proton
-	float temp1 = thisOne->energy*(thisOne->energy + 2.0*thisOne->mass);
-	float temp2 = (thisOne->energy - energyTransfer)*(thisOne->energy - energyTransfer + 2.0*thisOne->mass);
-	float costhe = (temp1 + temp2 - energyTransfer*(energyTransfer + 2.0*thisOne->mass))/2.0/sqrt(temp1*temp2);
+	if(costhe > 1.0f + ZERO || costhe < -1.0f - ZERO){
+		printf("nan from PPE, cos(theta) = %f\n", costhe);
+	}
+	costhe = costhe > 1.0f ? 1.0f : costhe;
+	costhe = costhe < -1.0f ? -1.0f : costhe;
+	
 	float theta = acos(costhe);
-
-	if(isnan(theta))
-		printf("nan from PPE\n");
-
 	float phi = 2*PI*MTrng(iseed);
 	update(thisOne, 0.0f, energyTransfer, theta, phi, 0, 0.0f);
 
 	// compute angular deflection of recoil proton and store in secondary particle container
-	temp1 = (sqrt(temp1) - sqrt(temp2)*(costhe))/sqrt(energyTransfer*(energyTransfer + 2.0f*thisOne->mass));
-
+	float alpha = acos((p1 - p3*costhe)/p4);
 	PS newOne = *thisOne;
 	newOne.energy = energyTransfer;
 	newOne.ifPrimary = 0;
 
-	if(isnan(acos(temp1)))
-		printf("nan from PPE with secondary proton\n");
+	if(isnan(alpha))
+		printf("nan from PPE with secondary proton, cos(alpha) = %f, p1 = %f, p3 = %f, costhe = %f, p4 = %f, E4 = %f, E3 = %f\n", 
+		(p1 - p3*costhe)/p4, p1, p3, costhe, p4, E4, E3);
 
-	update(&newOne, 0.0f, 0.0f, acos(temp1), phi+PI, 0, 0.0f);
+	update(&newOne, 0.0f, 0.0f, alpha, phi+PI, 0, 0.0f);
 	store(&newOne, secondary, nSecondary, mutex2Secondary);
 }
 

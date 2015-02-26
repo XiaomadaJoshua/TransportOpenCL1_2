@@ -130,11 +130,12 @@ int main(){
 	int temp;
 	MCEngine mc("proton_config");
 	mc.simulate(MINPROTONENERGY);
+	
 //	std::cin >> temp;
 }
 
 
-/*/nt main(){
+/*int main(){
 	OpenCLStuff stuff;
 	cl_float2 width;
 	cl_float3 center;
