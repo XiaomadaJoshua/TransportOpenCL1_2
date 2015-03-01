@@ -10,7 +10,7 @@
 #define XW 36.0863	//radiation length of water, in cm
 #define PI 3.1415926535897932384626433
 #define SECONDPARTICLEVOLUME 10000
-#define EMINPOI 1.0	//minimun energy used in p-o inelastic event, in MeV
+#define EMINPOI 18.0	//minimun energy used in p-o inelastic event, in MeV
 #define EBIND 3.0	//initial binding energy used in p-o inelastic, in MeV
 #define MAXSTEP 0.2 //in cm
 #define MAXENERGYRATIO 0.25 //Max energy decay ratio of initial energy in a step

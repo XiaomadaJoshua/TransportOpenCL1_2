@@ -394,9 +394,9 @@ void PPElastic(PS * thisOne, __global PS * secondary, volatile __global uint * n
 	float m = MP;
 	float E1 = thisOne->energy + m;
 	float p1 = sqrt(E1*E1 - m*m);
-	float beta = p1/(E1 + MP);//lorentz factor to CMS frame
-	float gamma = 1.0f/sqrt(1 - beta*beta);
-	float p1CMS = p1*gamma - beta*gamma*E1;
+	float betaCMS = p1/(E1 + MP);//lorentz factor to CMS frame
+	float gammaCMS = 1.0f/sqrt(1 - betaCMS*betaCMS);
+	float p1CMS = p1*gammaCMS - betaCMS*gammaCMS*E1;
 	float t, xi;
 	do{
 		t = MTrng(iseed)*(-4.0f)*p1CMS*p1CMS;
@@ -483,24 +483,24 @@ void POInelastic(PS * thisOne, __global PS * secondary, volatile __global uint *
 
 		float energy2SecondParticle = MTrng(iseed)*(remainEnergy - minEnergy) + minEnergy;
 
-
-		if(rand < 0.45f){ //proton
+		if(rand < 0.5f){ //proton
 			PS newOne = *thisOne;
 			newOne.energy = energy2SecondParticle;
 			newOne.ifPrimary = 0;
-			float costhe = MTrng(iseed)*(2.0f - 2.0f*energy2SecondParticle/remainEnergy) + 2.0f*minEnergy/remainEnergy - 1.0f;
+//			float costhe = MTrng(iseed)*(2.0f - 2.0f*energy2SecondParticle/remainEnergy) + 2.0f*minEnergy/remainEnergy - 1.0f;
+			float xi = 2.5f*energy2SecondParticle/remainEnergy;
+			float costhe = log(MTrng(iseed)*(exp(xi) - exp(-xi)) + exp(-xi))/xi;
 			float theta = acos(costhe);
-
 			float phi = 2.0f*PI*MTrng(iseed);
 			update(&newOne, 0.0f, 0.0f, theta, phi, 0, 0.0f);
 
 			if(isnan(theta))
-				printf("nan from POI, cosine theta is %f\n", costhe);
+				printf("nan from POI, cosine theta is %f, xi = %f\n", costhe, xi);
 
 			store(&newOne, secondary, nSecondary, mutex2Secondary);
 		}
 
-		else if(rand < 0.453f)//short range energy
+		else if(rand < 0.503f)//short range energy
 			energyDeposit += energy2SecondParticle;
 
 		bindEnergy *= 0.5f;
