@@ -21,7 +21,8 @@
 #define MINCARBONENERGY 5.0 //Min carbon energy to transport in MeV
 #define SECONDARYNUMBERRATIO 4 // ratio of nbatch over maxWorkGroupSize
 #define PPETHRESHOLD 12.0 // energy threshold of proton proton interaction
-#define POTHRESHOLD 7.0 // energy threshold of proton oxygen interaction
+#define POITHRESHOLD 8.0 // energy threshold of proton oxygen inelastic interaction
+#define POETHRESHOLD 30.0 // energy threshold of proton oxygen elastic interaction
 #define NDOSECOUNTERS 10 // number of dosecounters
 
 #define MIN(a,b) (a > b ? b : a)

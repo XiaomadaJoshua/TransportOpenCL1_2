@@ -8,7 +8,7 @@ input/mcpro.rstpw
 input/densityCorrection.dat
 // beam parameters: width, energy, number of protons, source center
 0.2  0.2
-100.00000000
+200.00000000
 10000
 0.00000000 0.00000000 -14.999999
 // phantom parameters: vox size, iso center, width, hight, depth

@@ -431,8 +431,17 @@ void PPElastic(PS * thisOne, __global PS * secondary, volatile __global uint * n
 		(p1 - p3*costhe)/p4, p1, p3, costhe, p4, E4, E3);
 
 	update(&newOne, 0.0f, 0.0f, alpha, phi+PI, 0, 0.0f);
+
+	if(thisOne->energy < newOne.energy){
+		thisOne->ifPrimary = 0;
+		newOne.ifPrimary = 1;
+	}
+	
 	store(&newOne, secondary, nSecondary, mutex2Secondary);
 }
+
+	// let the proton with higher energy be primary proton
+
 
 void POElastic(PS * thisOne, global float8 * doseCounter, int absIndex, int nVoxels, int * iseed){
 	// sample energy transferred to oxygen
@@ -532,12 +541,12 @@ void hardEvent(PS * thisOne, float stepLength, float4 vox, read_only image1d_t M
 		return;
 	}
 	else if(rand < sigIon + sigPPE + sigPOE){
-		if(thisOne->energy > POTHRESHOLD)
+		if(thisOne->energy > POETHRESHOLD)
 			POElastic(thisOne, doseCounter, absIndex, nVoxels, iseed);
 		return;
 	} 
 	else if(rand < sigIon+sigPPE + sigPOE + sigPOI){
-		if(thisOne->energy > POTHRESHOLD)
+		if(thisOne->energy > POITHRESHOLD)
 			POInelastic(thisOne, secondary, nSecondary, doseCounter, absIndex, nVoxels, iseed, mutex2Secondary);
 		return;
 	}
