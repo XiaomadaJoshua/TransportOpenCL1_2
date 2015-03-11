@@ -497,7 +497,7 @@ void POInelastic(PS * thisOne, __global PS * secondary, volatile __global uint *
 			newOne.energy = energy2SecondParticle;
 			newOne.ifPrimary = 0;
 //			float costhe = MTrng(iseed)*(2.0f - 2.0f*energy2SecondParticle/remainEnergy) + 2.0f*minEnergy/remainEnergy - 1.0f;
-			float xi = 2.5f*energy2SecondParticle/remainEnergy;
+			float xi = 3.5f*energy2SecondParticle/remainEnergy;
 			float costhe = log(MTrng(iseed)*(exp(xi) - exp(-xi)) + exp(-xi))/xi;
 			float theta = acos(costhe);
 			float phi = 2.0f*PI*MTrng(iseed);
@@ -509,7 +509,7 @@ void POInelastic(PS * thisOne, __global PS * secondary, volatile __global uint *
 			store(&newOne, secondary, nSecondary, mutex2Secondary);
 		}
 
-		else if(rand < 0.503f)//short range energy
+		else if(rand < 0.74f)//short range energy
 			energyDeposit += energy2SecondParticle;
 
 		bindEnergy *= 0.5f;
@@ -643,15 +643,15 @@ __kernel void propagate(__global PS * particle, __global float8 * doseCounter,
 
 		// deflection
 		z1 = MTGaussian(iseed);
-		z2 = MTGaussian(iseed);
+		//z2 = MTGaussian(iseed);
 		theta0 = ES*thisOne.charge*sqrt(stepLength/radiationLength(vox))/beta(&thisOne)/sqrt(momentumSquare(&thisOne));
 		theta = z1 * theta0;
-		deflection = z1*stepLength*theta0/sqrt(12.0f) + z2*stepLength*theta0/2.0f;
-		deflection = ABS(deflection) < ZERO ? ZERO*deflection/ABS(deflection) : deflection;
+		//deflection = z1*stepLength*theta0/sqrt(12.0f) + z2*stepLength*theta0/2.0f;
+		//deflection = ABS(deflection) < ZERO ? ZERO*deflection/ABS(deflection) : deflection;
 //		printf("deflection %f\n", deflection);
 		phi = 2.0f*PI*MTrng(iseed);
 		thisOne.maxSigma = sigma;
-		update(&thisOne, stepLength, energyTransfer, theta, phi, crossBound, deflection);
+		update(&thisOne, stepLength, energyTransfer, theta, phi, crossBound, 0);
 		score(doseCounter, absIndex, nVoxels, energyTransfer, stepLength, thisOne.ifPrimary, iseed);
 		scoreFluence(doseCounter, absIndex, nVoxels, thisOne.ifPrimary, stepLength, mutex, iseed);
 
