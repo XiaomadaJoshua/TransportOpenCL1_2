@@ -7,13 +7,13 @@ input/mcpro.rstpw
 // directory for density correction factor:
 input/densityCorrection.dat
 // beam parameters: width, energy, number of protons, source center
-0.2  0.2
+0  0
 200.00000000
-5000000
+1000000
 0.00000000 0.00000000 -14.999999
 // phantom parameters: vox size, iso center, width, hight, depth
 0.2 0.2	0.1
 0.00000000 0.00000000 0.00000000
 51	51	300
 // output directory
-Output/200MeV/
+Output/pencil200/
