@@ -91,7 +91,6 @@
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <None Include="testKernel.cl" />
     <None Include="ParticleStatus.cl">
       <Filter>Source Files</Filter>
     </None>

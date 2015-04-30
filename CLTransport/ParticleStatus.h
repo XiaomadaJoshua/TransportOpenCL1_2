@@ -12,6 +12,7 @@ class Secondary;
 struct PS{
 	cl_float3 pos, dir;
 	cl_float energy, maxSigma, mass, charge;
+	cl_int ifPrimary;
 };
 
 class ParticleStatus
@@ -19,6 +20,7 @@ class ParticleStatus
 public:
 	ParticleStatus();
 	ParticleStatus(OpenCLStuff & stuff, cl_float T, cl_float2 width, cl_float3 sourceCenter_, cl_ulong nParticles_);
+	void buildProgram(OpenCLStuff & stuff);
 	void load(OpenCLStuff & stuff, cl_ulong nParticles, cl_float T, cl_float2 width, cl_float3 sourceCenter, cl_float mass, cl_float charge);
 	~ParticleStatus();
 	cl::Buffer & currentBeam() { return particleStatus[0]; }
@@ -33,7 +35,6 @@ public:
 
 protected:
 	std::vector<cl::Buffer> particleStatus;
-	std::vector<cl::Kernel> particleKernels;
 	cl::Program program;
 	cl::NDRange globalRange;
 

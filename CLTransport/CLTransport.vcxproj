@@ -102,6 +102,7 @@
   <ItemGroup>
     <ClCompile Include="DensCorrection.cpp" />
     <ClCompile Include="MacroCrossSection.cpp" />
+    <ClCompile Include="main.cpp" />
     <ClCompile Include="MCEngine.cpp" />
     <ClCompile Include="MSPR.cpp" />
     <ClCompile Include="OpenCLStuff.cpp" />
@@ -110,13 +111,11 @@
     <ClCompile Include="Proton.cpp" />
     <ClCompile Include="RSPW.cpp" />
     <ClCompile Include="Secondary.cpp" />
-    <ClCompile Include="test.cpp" />
   </ItemGroup>
   <ItemGroup>
     <None Include="ParticleStatus.cl" />
     <None Include="Phantom.cl" />
     <None Include="proton_config" />
-    <None Include="testKernel.cl" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

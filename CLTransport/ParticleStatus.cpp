@@ -14,6 +14,11 @@ ParticleStatus::ParticleStatus(){
 }
 
 ParticleStatus::ParticleStatus(OpenCLStuff & stuff, cl_float T, cl_float2 width_, cl_float3 sourceCenter_, cl_ulong nParticles_):energy(T), width(width_), sourceCenter(sourceCenter_), nParticles(nParticles_) {
+	buildProgram(stuff);
+}
+
+void ParticleStatus::buildProgram(OpenCLStuff & stuff){
+
 	std::string source;
 	OpenCLStuff::convertToString("ParticleStatus.cl", source);
 	int err;
@@ -21,25 +26,31 @@ ParticleStatus::ParticleStatus(OpenCLStuff & stuff, cl_float T, cl_float2 width_
 	err = program.build("-cl-single-precision-constant");
 	std::string info;
 	info = program.getBuildInfo<CL_PROGRAM_BUILD_LOG>(stuff.device);
+	std::cout << "build result: " << err << std::endl;
 	std::cout << info << std::endl;
-	err = program.createKernels(&particleKernels);
 }
 
 
 
 void ParticleStatus::load(OpenCLStuff & stuff, cl_ulong nParticles_, cl_float T, cl_float2 width, cl_float3 sourceCenter_, cl_float mass, cl_float charge)
 {
-	stuff.queue.finish();
+//	stuff.queue.finish();
 	particleStatus.clear();
-	particleStatus.push_back(cl::Buffer(stuff.context, CL_MEM_READ_WRITE, sizeof(PS) * nParticles_));
 	int err;
-	cl::make_kernel<cl::Buffer &, cl_float, cl_float2, cl_float3, cl_float, cl_float, cl_int> initParticlesKernel(program, "initParticles", &err);
+	int tempSize = sizeof(PS);
+	particleStatus.push_back(cl::Buffer(stuff.context, CL_MEM_READ_WRITE, sizeof(PS) * nParticles_, NULL, &err));
+
+	cl::make_kernel<cl::Buffer &, cl_float, cl_float2, cl_float3, cl_float, cl_float, cl_int> initParticlesKernel(program, "initParticles");
 
 	globalRange = cl::NDRange(nParticles_);
 	cl::EnqueueArgs arg (stuff.queue, globalRange);
 	srand((unsigned int)time(NULL));
 	cl_int randSeed = rand();
 	initParticlesKernel(arg, particleStatus[0], T, width, sourceCenter_, mass, charge, randSeed);
+//	stuff.queue.finish();
+
+//	PS * particleTest = new PS[nParticles_]();
+//	err = stuff.queue.enqueueReadBuffer(particleStatus[0], CL_TRUE, 0, sizeof(PS) * nParticles_, particleTest);
 }
 
 
@@ -64,29 +75,19 @@ int ParticleStatus::reload(OpenCLStuff & stuff){
 void ParticleStatus::propagate(OpenCLStuff & stuff, Phantom * phantom, MacroCrossSection * macroSigma, 
 	RSPW * resStpPowWater, MSPR * massStpPowRatio, ParticleStatus * secondary){
 	int err;
-
 	cl::EnqueueArgs arg(stuff.queue, globalRange);
-	/*
-	particleKernels[1].setArg(0, particleStatus[0]);
-	particleKernels[1].setArg(1, phantom->doseCounterGPU());
-	particleKernels[1].setArg(2, phantom->voxelGPU());
-	particleKernels[1].setArg(3, phantom->voxelSize());
-	particleKernels[1].setArg(4, macroSigma->gpu());
-	particleKernels[1].setArg(5, resStpPowWater->gpu());
-	particleKernels[1].setArg(6, massStpPowRatio->gpu());
-	particleKernels[1].setArg(7, secondary->particleStatus[0]);
-	particleKernels[1].setArg(8, randSeed);
-
-	stuff.queue.enqueueNDRangeKernel(particleKernels[1], 0, globalRange);
-	*/
 	
-	cl::make_kernel < cl::Buffer &, cl::Buffer &, cl::Image3D &, cl_float3, cl::Image2D &, cl::Image2D &, cl::Image2D &, cl::Buffer &, cl::Buffer &, cl_int> propagateKernel(program, "propagate", &err);
+	cl::make_kernel < cl::Buffer &, cl::Buffer &, cl::Image3D &, cl_float3, cl::Image2D &, cl::Image2D &, cl::Image2D &, cl::Buffer &, cl::Buffer &, cl_int, cl::Buffer &> propagateKernel(program, "propagate", &err);
 
-	stuff.queue.finish();
 	time_t timer;
 	srand((unsigned int)time(NULL));
 	cl_int randSeed = rand();
-	propagateKernel(arg, particleStatus.back(), phantom->doseCounterGPU(), phantom->voxelGPU(), phantom->voxelSize(), macroSigma->gpu(),
-		resStpPowWater->gpu(), massStpPowRatio->gpu(), secondary->particleStatus[0], secondary->nSecondBuffer(), randSeed);
+	cl::Buffer mutex(stuff.context, CL_MEM_READ_WRITE, sizeof(cl_int), NULL, &err);
+	cl_int initialMutext = 0;
+	stuff.queue.enqueueWriteBuffer(mutex, CL_TRUE, 0, sizeof(cl_int), &initialMutext);
+
 	stuff.queue.finish();
+	propagateKernel(arg, particleStatus.back(), phantom->doseCounterGPU(), phantom->voxelGPU(), phantom->voxelSize(), macroSigma->gpu(),
+		resStpPowWater->gpu(), massStpPowRatio->gpu(), secondary->particleStatus[0], secondary->nSecondBuffer(), randSeed, mutex);
+
 }

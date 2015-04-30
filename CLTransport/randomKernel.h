@@ -39,7 +39,6 @@ float MTrng(int * iseed){
 
 	int IZ = iseed[0] - iseed[1];
 	if (IZ < 1) IZ = IZ + 2147483562;
-
 	return (float)(IZ*4.656612873077392578125e-10);
 }
 
@@ -47,9 +46,9 @@ float MTGaussian(int * iseed){
 	return inverseCumulativeNormal(MTrng(iseed));
 }
 
-float MTExp(int * iseed, float p){
+float MTExp(int * iseed, float lambda){
 
-	return -log(1 - MTrng(iseed)) / p;
+	return -log(1 - MTrng(iseed))*lambda;
 }
 
 
