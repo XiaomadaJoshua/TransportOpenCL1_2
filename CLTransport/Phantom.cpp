@@ -5,24 +5,80 @@
 #include <iostream>
 #include <fstream>
 #include <string>
+#include <vector>
 
-Phantom::Phantom(OpenCLStuff & stuff, cl_float3 voxSize_, cl_int3 size_, const DensCorrection & densityCF, const MSPR & massSPR) :voxSize(voxSize_), size(size_)
+using std::string;
+
+Phantom::Phantom(OpenCLStuff & stuff, cl_float3 voxSize_, cl_int3 size_, const DensCorrection & densityCF, const MSPR & massSPR)
+	:voxSize(voxSize_), size(size_)
 {
+	shift.s[0] = 0.0f;
+	shift.s[1] = 0.0f;
+	shift.s[2] = 0.0f;
+
+	initialize(NULL, stuff, densityCF, massSPR);
+}
+
+Phantom::Phantom(OpenCLStuff & stuff, const string & CTConfig, const string & CTFile, const DensCorrection & densityCF, const MSPR & massSPR){
+	char ch, buffer[500];
+	cl_float3 phantomSize;
+	std::ifstream ifs(CTConfig, std::fstream::in);
+	ifs.getline(buffer, 500);
+	ifs.ignore(100, '"');
+	ifs >> phantomSize.s[0] >> ch >> phantomSize.s[1] >> ch >> phantomSize.s[2] >> ch
+		>> shift.s[0] >> ch >> shift.s[1] >> ch >> shift.s[2]
+		>> ch >> size.s[0] >> ch >> size.s[1] >> ch >> size.s[2];
+	voxSize.s[0] = phantomSize.s[0] * 0.1f / size.s[0];
+	voxSize.s[1] = phantomSize.s[1] * 0.1f / size.s[1]; 
+	voxSize.s[2] = phantomSize.s[2] * 0.1f / size.s[2];
+
+	ifs.close();
+
+	FILE * fp = fopen(CTFile.c_str(), "r");
+	if (fp == NULL)
+	{
+		std::cout << "Error in opening CT file" << std::endl;
+		exit(1);
+	}
+
+	short * CT = (short *)malloc(sizeof(short) * size.s[0] * size.s[1] * size.s[2]);
+	printf("Reading CT number...\n");
+
+	fread(CT, sizeof(short)*size.s[0] * size.s[1] * size.s[2], 1, fp);
+	fclose(fp);
+
+	initialize(CT, stuff, densityCF, massSPR);
+	delete[] CT;
+}
+
+void Phantom::initialize(const short * CT, OpenCLStuff & stuff, const DensCorrection & densityCF, const MSPR & massSPR){
+
 	int err;
 	cl::ImageFormat format(CL_RGBA, CL_FLOAT);
 	voxelAttributes = cl::Image3D(stuff.context, CL_MEM_READ_ONLY, format, size.s[0], size.s[1], size.s[2], 0, 0, NULL, &err);
 
 	int nVoxels = size.s[0] * size.s[1] * size.s[2];
-
 	attributes = new cl_float4[nVoxels];
-	for (int i = 0; i < nVoxels; i++){
-		attributes[i].s[0] = 0.0f; // ct value
-		attributes[i].s[1] = setMaterial(attributes[i].s[0], massSPR); // material number
-		attributes[i].s[2] = ct2den(attributes[i].s[0]); // density
-		int ind = attributes[i].s[0] + 1000;
-		ind = ind > densityCF.size() - 1 ? densityCF.size() - 1 : ind;
-		attributes[i].s[2] *= densityCF[ind];
-		attributes[i].s[3] = ct2eden(attributes[i].s[1], attributes[i].s[2]); // edensity
+
+	if (CT != NULL){
+		for (int i = 0; i < nVoxels; i++){
+			attributes[i].s[0] = (float)CT[i]; // ct value
+			attributes[i].s[0] = attributes[i].s[0] > massSPR.lookStartingHU()[0] ? attributes[i].s[0] : massSPR.lookStartingHU()[0];
+			attributes[i].s[1] = setMaterial(attributes[i].s[0], massSPR); // material number
+			attributes[i].s[2] = ct2den(attributes[i].s[0]); // density
+			int ind = attributes[i].s[0] + 1000;
+			ind = ind > densityCF.size() - 1 ? densityCF.size() - 1 : ind;
+			attributes[i].s[2] *= densityCF[ind];
+			attributes[i].s[3] = ct2eden(attributes[i].s[1], attributes[i].s[2]); // edensity
+		}
+	}
+	else{
+		for (int i = 0; i < nVoxels; i++){
+			attributes[i].s[0] = 0.0f; // ct value
+			attributes[i].s[1] = setMaterial(attributes[i].s[0], massSPR); // material number
+			attributes[i].s[2] = 1.0; // density
+			attributes[i].s[3] = 1.0; // edensity
+		}
 	}
 
 	cl::size_t<3> origin;
@@ -36,24 +92,27 @@ Phantom::Phantom(OpenCLStuff & stuff, cl_float3 voxSize_, cl_int3 size_, const D
 	// 6 in float8 is secondary dose, 7 in float8 is heavy dose.
 	doseCounter = cl::Buffer(stuff.context, CL_MEM_READ_WRITE, sizeof(cl_float8)*nVoxels*NDOSECOUNTERS, NULL, &err);
 
-	std::string source;
+	string source;
 	OpenCLStuff::convertToString("Phantom.cl", source);
 	program = cl::Program(stuff.context, source);
 	program.build("-cl-single-precision-constant");
-	std::string info;
+	string info;
 	info = program.getBuildInfo<CL_PROGRAM_BUILD_LOG>(stuff.device);
 	cl::make_kernel<cl::Buffer &> initDoseCounterKernel(program, "initializeDoseCounter", &err);
 
 	cl::NDRange globalRange(nVoxels*NDOSECOUNTERS);
 	cl::EnqueueArgs arg(stuff.queue, globalRange);
+	err = stuff.queue.finish();
 	initDoseCounterKernel(arg, doseCounter);
-//	err = stuff.queue.finish();
+	err = stuff.queue.finish();
 
 	doseBuff = cl::Buffer(stuff.context, CL_MEM_READ_WRITE, sizeof(cl_float8)*nVoxels, NULL, &err);
 	globalRange = cl::NDRange(nVoxels);
 	cl::EnqueueArgs arg2(stuff.queue, globalRange);
 	initDoseCounterKernel(arg2, doseBuff);
 }
+
+
 
 
 Phantom::~Phantom()
@@ -93,10 +152,6 @@ cl_float Phantom::ct2den(cl_float huValue) const{
 }
 
 cl_float Phantom::setMaterial(cl_float huValue, const MSPR & massSPR) const{
-	if (huValue < massSPR.lookStartingHU()[0]){
-		std::cout << "invalid HU" << std::endl;
-		exit(EXIT_FAILURE);
-	}
 	for (unsigned int i = 0; i<massSPR.lookNMaterial() - 1; i++)
 		if (huValue >= massSPR.lookStartingHU()[i] && huValue < massSPR.lookStartingHU()[i + 1]){
 		int materialId = i;
@@ -161,7 +216,7 @@ void Phantom::finalize(OpenCLStuff & stuff){
 	finalizeKernel(arg, doseBuff, voxelAttributes, voxSize);
 }
 
-void Phantom::output(OpenCLStuff & stuff, std::string & outDir){
+void Phantom::output(OpenCLStuff & stuff, string & outDir){
 	int nVoxels = size.s[0] * size.s[1] * size.s[2];
 	cl_float8 * dose = new cl_float8[nVoxels];
 	stuff.queue.finish();
@@ -177,22 +232,22 @@ void Phantom::output(OpenCLStuff & stuff, std::string & outDir){
 	secondaryDose = new cl_float[nVoxels]();
 
 
-	std::string fileTotal = outDir+"totalDose.dat";
-	std::string fileTotalBin = outDir+"totalDose.bin";
-	std::string filePF = outDir + "primaryFluence.dat";
-	std::string filePFBin = outDir + "primaryFluence.bin";
-	std::string fileSF = outDir + "secondaryFluence.dat";
-	std::string fileSFBin = outDir + "secondaryFluence.bin";
-	std::string filePLET = outDir + "primaryLET.dat";
-	std::string filePLETBin = outDir + "primaryLET.bin";
-	std::string fileSLET = outDir + "secondaryLET.dat";
-	std::string fileSLETBin = outDir + "secondaryLET.bin";
-	std::string fileHeavy = outDir + "heavyDose.dat";
-	std::string fileHeavyBin = outDir + "heavyDose.bin";
-	std::string filePD = outDir + "primaryDose.dat";
-	std::string filePDBin = outDir + "primaryDose.bin";
-	std::string fileSD = outDir + "secondaryDose.dat";
-	std::string fileSDBin = outDir + "secondaryDose.bin";
+	string fileTotal = outDir+"totalDose.dat";
+	string fileTotalBin = outDir+"totalDose.bin";
+	string filePF = outDir + "primaryFluence.dat";
+	string filePFBin = outDir + "primaryFluence.bin";
+	string fileSF = outDir + "secondaryFluence.dat";
+	string fileSFBin = outDir + "secondaryFluence.bin";
+	string filePLET = outDir + "primaryLET.dat";
+	string filePLETBin = outDir + "primaryLET.bin";
+	string fileSLET = outDir + "secondaryLET.dat";
+	string fileSLETBin = outDir + "secondaryLET.bin";
+	string fileHeavy = outDir + "heavyDose.dat";
+	string fileHeavyBin = outDir + "heavyDose.bin";
+	string filePD = outDir + "primaryDose.dat";
+	string filePDBin = outDir + "primaryDose.bin";
+	string fileSD = outDir + "secondaryDose.dat";
+	string fileSDBin = outDir + "secondaryDose.bin";
 
 	std::ofstream ofsTotal(fileTotal, std::ios::out | std::ios::trunc);
 	std::ofstream ofsPF(filePF, std::ios::out | std::ios::trunc);
@@ -291,4 +346,64 @@ void Phantom::tempStore(OpenCLStuff & stuff){
 	cl::NDRange globalRange(size.s[0], size.s[1], size.s[2]);
 	cl::EnqueueArgs arg(stuff.queue, globalRange);
 	tempStoreKernel(arg, doseCounter, doseBuff);
+}
+
+
+
+string Phantom::getStringQuantity(string input, string quantity)
+//	get a string value from an input string
+{
+	string value;
+
+	unsigned found = input.find(quantity);
+	//	founded
+	if (found >= 0 && found < input.size())
+	{
+		for (int i = found + quantity.size(); i < input.size(); i++)
+		{
+			if (input[i] == '"')
+			{
+				int j = i + 1;
+				while (input[j] != '"')
+				{
+					value += input[j];
+					j++;
+				}
+				return value;
+			}
+		}
+	}
+	//	else return empty string
+	return value;
+
+}
+
+
+std::vector<float> Phantom::getFloatQuantity(string input, string quantity)
+//	get a float value from an input string
+{
+	std::vector<float> value;
+
+	unsigned found = input.find(quantity);
+	if (found >= 0 && found < input.size())
+	{
+		for (int i = found + quantity.size(); i < input.size();)
+		{
+			if (input[i] == '.' || isdigit(input[i]) || input[i] == '-')
+			{
+				string temp;
+				while (input[i] == '.' || isdigit(input[i]) || input[i] == '-')
+				{
+					temp += input[i];
+					i++;
+				}
+
+				value.push_back(atof(temp.c_str()));
+			}
+			else
+				i++;
+		}
+	}
+
+	return value;
 }

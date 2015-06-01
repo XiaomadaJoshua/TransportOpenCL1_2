@@ -63,6 +63,10 @@ MCEngine::MCEngine(const char * file){
 	ifs >> phantomIso.s[0] >> phantomIso.s[1] >> phantomIso.s[2] >> ws;
 	cl_int3 size;
 	ifs >> size.s[0] >> size.s[1] >> size.s[2] >> ws;
+	std::string ct, ctConfig;
+	ct = "C:/Users/S158879/workspace/patient/patient/CTStatic/ctvolume.dat";
+	ctConfig = "C:/Users/S158879/workspace/patient/patient/out/compare.set";
+	//phantom = new Phantom(stuff, ctConfig, ct, *densCorrection, *mspr);
 	phantom = new Phantom(stuff, voxSize, size, *densCorrection, *mspr);
 
 	//initialize secondary particles container

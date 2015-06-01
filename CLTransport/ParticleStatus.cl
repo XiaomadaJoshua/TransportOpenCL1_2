@@ -156,9 +156,9 @@ float radiationLength(float4 vox)
 	return WATERDENSITY*XW / (ratio*vox.s2);
 }
 
-/*float3 transform(float3 dir, float theta, float phi){
+float3 transform(float3 dir, float theta, float phi){
 	// if original direction is along z-axis
-	printf("direction before transform %v3f\n", dir);
+//	printf("direction before transform %f, %f, %f\n", dir.x, dir.y, dir.z);
 	float temp = 1.0 - ZERO;
 	if (dir.z*dir.z >= temp){
 		if (dir.z > 0){
@@ -187,15 +187,15 @@ float radiationLength(float4 vox)
 		printf("transform result: %v3f\n", dir);
 		printf("theta %f, phi %f\n", theta, phi);
 	}
-	printf("direction after transform %v3f\n", dir);
+//	printf("direction after transform %v3f\n", dir);
 
 	dir = normalize(dir);
-	printf("direction after normalization %v3f\n", dir);
+//	printf("direction after normalization %f, %f, %f\n", dir.x, dir.y, dir.z);
 	// if norm does not equal to 1
 	return normalize(dir);
 
-}*/
-
+}
+/*
 void transform(float3 * dir, float theta, float phi){
 	// if original direction is along z-axis
 //	printf("direction before transform %f %f %f\n", (*dir).x, (*dir).y, (*dir).z);
@@ -232,7 +232,7 @@ void transform(float3 * dir, float theta, float phi){
 	*dir = normalize(*dir);
 //	printf("direction after normalization %f %f %f\n", (*dir).x, (*dir).y, (*dir).z);
 
-}
+}*/
 
 float3 getMovement(float3 value, int crossBound){
 	switch(crossBound){
@@ -271,7 +271,7 @@ inline void update(PS * thisOne, float stepLength, float energyTransfer, float t
 		movement += n;
 	}*/
 	thisOne->pos += movement;
-	transform(&(thisOne->dir), theta, phi);
+	thisOne->dir = transform(thisOne->dir, theta, phi);
 	thisOne->energy -= energyTransfer;
 //	printf("after update dir %f %f %f, pos %f %f %f\n", thisOne->dir.x, thisOne->dir.y, thisOne->dir.z, thisOne->pos.x, thisOne->pos.y, thisOne->pos.z);
 
@@ -468,6 +468,8 @@ void POElastic(PS * thisOne, global float8 * doseCounter, int absIndex, int nVox
 	float phi;
 	phi = MTrng(iseed)*2.0f*PI;
 
+		if(energyTransfer < 0)
+		printf("energyTransfer = %f\n", energyTransfer);
 	update(thisOne, 0.0f, energyTransfer, theta, phi, 0, 0.0f);
 	scoreHeavy(doseCounter, absIndex, nVoxels, energyTransfer, iseed);
 }
@@ -515,6 +517,8 @@ void POInelastic(PS * thisOne, __global PS * secondary, volatile __global uint *
 		bindEnergy *= 0.5f;
 		remainEnergy -= energy2SecondParticle;
 	}
+	if(energyDeposit < 0)
+		printf("energyDeposit = %f\n", energyDeposit);
 	scoreHeavy(doseCounter, absIndex, nVoxels, energyDeposit, iseed);
 	update(thisOne, 0.0f, thisOne->energy, 0.0f, 0.0f, 0, 0.0f);
 }
@@ -523,6 +527,7 @@ void hardEvent(PS * thisOne, float stepLength, float4 vox, read_only image1d_t M
 				int * iseed, global int * mutex2Secondary){
 	sampler_t sampler = CLK_NORMALIZED_COORDS_FALSE | CLK_ADDRESS_CLAMP_TO_EDGE | CLK_FILTER_LINEAR;
 	float4 mcs = read_imagef(MCS, sampler, thisOne->energy/0.5f - 0.5f);
+	//printf("energy = %f, mcs = %v4f\n", thisOne->energy, mcs);
 	float sigIon = mcs.s0*vox.s3;
 	float sigPPE = mcs.s1*vox.s2;
 	float sigPOE = mcs.s2*vox.s2;
@@ -535,7 +540,7 @@ void hardEvent(PS * thisOne, float stepLength, float4 vox, read_only image1d_t M
 		ionization(thisOne, doseCounter, absIndex, nVoxels, iseed, stepLength);
 		return;
 	}
-	else if(rand < sigIon + sigPPE){
+/*	else if(rand < sigIon + sigPPE){
 		if(thisOne->energy > PPETHRESHOLD)
 			PPElastic(thisOne, secondary, nSecondary, iseed, mutex2Secondary);
 		return;
@@ -549,12 +554,35 @@ void hardEvent(PS * thisOne, float stepLength, float4 vox, read_only image1d_t M
 		if(thisOne->energy > POITHRESHOLD)
 			POInelastic(thisOne, secondary, nSecondary, doseCounter, absIndex, nVoxels, iseed, mutex2Secondary);
 		return;
-	}
+	}*/
+}
+
+void rayTrace(PS * particle, int3 phantomSize, float3 voxSize, float3 shift){
+	if(ifInsidePhantom(particle->pos, voxSize, phantomSize))
+		return;
+	particle->pos.x -= shift.x;
+	particle->pos.y -= shift.y;
+	particle->pos.z -= shift.z;
+	float3 phantomBoundary1, phantomBoundary2;
+	phantomBoundary1 = -convert_float3(phantomSize)*voxSize/2.0f;
+	phantomBoundary2 = convert_float3(phantomSize)*voxSize/2.0f;
+
+	float3 delta1, delta2, delta;
+	delta1 = (phantomBoundary1 - particle->pos)/particle->dir;
+	delta2 = (phantomBoundary2 - particle->pos)/particle->dir;
+	delta =	fmin(delta1, delta2);
+
+	float translation = fmax(fmax(delta.x, delta.y), delta.z);
+//	printf("particle pos = %f, %f, %f, dir = %f, %f, %f, delta = %v3f, translation = %f\n", 
+//		particle->pos.x, particle->pos.y, particle->pos.z, particle->dir.x, particle->dir.y, particle->dir.z, delta, translation);	
+	update(particle, translation + ZERO, 0.0, 0.0, 0.0, 0, 0.0);
+//	printf("particle pos = %f, %f, %f, dir = %f, %f, %f, delta = %v3f, translation = %f\n", 
+//		particle->pos.x, particle->pos.y, particle->pos.z, particle->dir.x, particle->dir.y, particle->dir.z, delta, translation);
 }
 
 
 __kernel void propagate(__global PS * particle, __global float8 * doseCounter, 
-		__read_only image3d_t voxels, float3 voxSize, __read_only image1d_t MCS, __read_only image1d_t RSPW, 
+		__read_only image3d_t voxels, float3 voxSize, float3 shift, __read_only image1d_t MCS, __read_only image1d_t RSPW, 
 		__read_only image2d_t MSPR, __global PS * secondary, volatile __global uint * nSecondary, int randSeed, __global int * mutex){
 
 	size_t gid = get_global_id(0);
@@ -581,6 +609,7 @@ __kernel void propagate(__global PS * particle, __global float8 * doseCounter,
 	bool ifHard;
 	int step = 0;
 
+	rayTrace(&thisOne, phantomSize, voxSize, shift);
 	while (ifInsidePhantom(thisOne.pos, voxSize, phantomSize)){
 		step++;
 		voxIndex = thisOne.pos / voxSize + convert_float3(phantomSize)*0.5f;
@@ -648,7 +677,7 @@ __kernel void propagate(__global PS * particle, __global float8 * doseCounter,
 		theta = z1 * theta0;
 		//deflection = z1*stepLength*theta0/sqrt(12.0f) + z2*stepLength*theta0/2.0f;
 		//deflection = ABS(deflection) < ZERO ? ZERO*deflection/ABS(deflection) : deflection;
-//		printf("deflection %f\n", deflection);
+//		printf("theta =  %f\n", theta);
 		phi = 2.0f*PI*MTrng(iseed);
 		thisOne.maxSigma = sigma;
 		update(&thisOne, stepLength, energyTransfer, theta, phi, crossBound, 0);

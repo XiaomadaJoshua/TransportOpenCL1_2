@@ -6,7 +6,7 @@
 #define MO 14903.3460795634 //oxygen mass in MeV
 #define MINELECTRONENERGY 0.1 // MeV
 #define TWOPIRE2MENEW 0.08515495201157892 //2pi*r_e^2*m_e*n_{ew}, where r_e in cm, m_e in eV, n_ew = 3.34e23/cm^3
-#define ES 17.1	// Es parameter for multiple scatter angle, in MeV
+#define ES 0	// Es parameter for multiple scatter angle, in MeV
 #define XW 36.0863	//radiation length of water, in cm
 #define PI 3.1415926535897932384626433
 #define SECONDPARTICLEVOLUME 10000
@@ -23,7 +23,7 @@
 #define PPETHRESHOLD 12.0 // energy threshold of proton proton interaction
 #define POITHRESHOLD 8.0 // energy threshold of proton oxygen inelastic interaction
 #define POETHRESHOLD 30.0 // energy threshold of proton oxygen elastic interaction
-#define NDOSECOUNTERS 10 // number of dosecounters
+#define NDOSECOUNTERS 4 // number of dosecounters
 
 #define MIN(a,b) (a > b ? b : a)
 #define MIN3(a,b,c) (a > b ? b : a) > c ? c : (a > b ? b : a)
