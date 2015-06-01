@@ -373,7 +373,13 @@ void PPElastic(PS * thisOne, __global PS * secondary, volatile __global uint * n
 
 void POElastic(PS * thisOne, global float8 * doseCounter, int absIndex, int nVoxels, int * iseed){
 	// sample energy transferred to oxygen
+	if(thisOne->energy < 7.2){
+		scoreHeavy(doseCounter, absIndex, nVoxels, thisOne->energy, iseed);
+		thisOne->energy = 0;
+		return;
+	}
 	float meanEnergy = 0.65f*exp(-0.0013f*thisOne->energy) - 0.71f*exp(-0.0177f*thisOne->energy);
+	
 //	meanEnergy = meanEnergy < 1.0f ? 1.0f : meanEnergy;
 	float energyTransfer;
 	do{
@@ -401,31 +407,30 @@ void POElastic(PS * thisOne, global float8 * doseCounter, int absIndex, int nVox
 }
 
 void POInelastic(PS * thisOne, __global PS * secondary, volatile __global uint * nSecondary, global float8 * doseCounter, int absIndex, int nVoxels, int * iseed, global int * mutex2Secondary){
-
 	float rand = MTrng(iseed);
 
-	float bindEnergy = EBIND;
-	float minEnergy = EMINPOI;
+	float bindEnergy = 3.0f;
+	float minEnergy = 1.0f;
 	float remainEnergy = thisOne->energy;
 	float energyDeposit = 0.0f;
 
 	// simulate POI
 	while(true){
-		if(remainEnergy - bindEnergy < minEnergy){
+		if(remainEnergy - bindEnergy <= minEnergy){
 			energyDeposit += remainEnergy;
 			break;
 		}
-		energyDeposit += bindEnergy;
+//		energyDeposit += bindEnergy;
 		remainEnergy -= bindEnergy;
 
-		float energy2SecondParticle = MTrng(iseed)*(remainEnergy - minEnergy) + minEnergy;
+		float energy2SecondParticle = (1.0f - pow(MTrng(iseed), 2.5f))*(remainEnergy - minEnergy) + minEnergy;
 
-		if(rand < 0.5f){ //proton
+		if(rand < 0.65f){ //proton
 			PS newOne = *thisOne;
 			newOne.energy = energy2SecondParticle;
 			newOne.ifPrimary = 0;
 //			float costhe = MTrng(iseed)*(2.0f - 2.0f*energy2SecondParticle/remainEnergy) + 2.0f*minEnergy/remainEnergy - 1.0f;
-			float xi = 3.5f*energy2SecondParticle/remainEnergy;
+			float xi = 4.0f*energy2SecondParticle*energy2SecondParticle/remainEnergy/remainEnergy;
 			float costhe = log(MTrng(iseed)*(exp(xi) - exp(-xi)) + exp(-xi))/xi;
 			float theta = acos(costhe);
 			float phi = 2.0f*PI*MTrng(iseed);
@@ -437,7 +442,7 @@ void POInelastic(PS * thisOne, __global PS * secondary, volatile __global uint *
 			store(&newOne, secondary, nSecondary, mutex2Secondary);
 		}
 
-		else if(rand < 0.503f)//short range energy
+		else if(rand < 0.69f)//short range energy
 			energyDeposit += energy2SecondParticle;
 
 		bindEnergy *= 0.5f;
@@ -446,6 +451,51 @@ void POInelastic(PS * thisOne, __global PS * secondary, volatile __global uint *
 	scoreHeavy(doseCounter, absIndex, nVoxels, energyDeposit, iseed);
 	update(thisOne, 0.0f, thisOne->energy, 0.0f, 0.0f, 0, 0.0f);
 }
+/*
+void POInelastic(PS * thisOne, __global PS * secondary, volatile __global uint * nSecondary, global float8 * doseCounter, int absIndex, int nVoxels, int * iseed, global int * mutex2Secondary){
+	float rand = MTrng(iseed);
+
+	float bindEnergy = 3.0f;
+	float minEnergy = 1.0f;
+	float remainEnergy = thisOne->energy;
+	float energyDeposit = 0.0f;
+
+	// simulate POI
+		if(remainEnergy - bindEnergy <= minEnergy){
+			energyDeposit += remainEnergy;
+			thisOne->energy = 0.0f;
+			return;
+		}
+		energyDeposit += bindEnergy;
+		remainEnergy -= bindEnergy;
+
+		float energy2SecondParticle = MTrng(iseed)*MTrng(iseed)*(remainEnergy - minEnergy) + minEnergy;
+
+		if(rand < 0.5f){ //proton
+			PS newOne = *thisOne;
+			newOne.energy = energy2SecondParticle;
+			newOne.ifPrimary = 0;
+			float costhe = MTrng(iseed)*(2.0f - 2.0f*energy2SecondParticle/remainEnergy) + 2.0f*minEnergy/remainEnergy - 1.0f;
+//			float xi = 5.0f*energy2SecondParticle*energy2SecondParticle/remainEnergy/remainEnergy;
+//			float costhe = log(MTrng(iseed)*(exp(xi) - exp(-xi)) + exp(-xi))/xi;
+			float theta = acos(costhe);
+			float phi = 2.0f*PI*MTrng(iseed);
+			update(&newOne, 0.0f, 0.0f, theta, phi, 0, 0.0f);
+
+//			if(isnan(theta))
+//				printf("nan from POI, cosine theta is %f, xi = %f\n", costhe, xi);
+
+			store(&newOne, secondary, nSecondary, mutex2Secondary);
+			}
+
+		else if(rand < 0.56f)//short range energy
+			energyDeposit += energy2SecondParticle;
+
+		remainEnergy -= energy2SecondParticle;
+	scoreHeavy(doseCounter, absIndex, nVoxels, energyDeposit, iseed);
+	thisOne->energy = remainEnergy;
+	thisOne->ifPrimary = 0;
+}*/
 
 void hardEvent(PS * thisOne, float stepLength, float4 vox, read_only image2d_t MCS, global float8 * doseCounter, int absIndex, int nVoxels, global PS * secondary, volatile __global uint * nSecondary, 
 				int * iseed, global int * mutex2Secondary){
@@ -464,17 +514,17 @@ void hardEvent(PS * thisOne, float stepLength, float4 vox, read_only image2d_t M
 		return;
 	}
 	else if(rand < sigIon + sigPPE){
-		if(thisOne->energy > PPETHRESHOLD)
+		if(thisOne->energy > 10.0)
 			PPElastic(thisOne, secondary, nSecondary, iseed, mutex2Secondary);
 		return;
 	}
 	else if(rand < sigIon + sigPPE + sigPOE){
-		if(thisOne->energy > POETHRESHOLD)
+		if(thisOne->energy > 7.0)
 			POElastic(thisOne, doseCounter, absIndex, nVoxels, iseed);
 		return;
 	} 
 	else if(rand < sigIon+sigPPE + sigPOE + sigPOI){
-		if(thisOne->energy > POITHRESHOLD)
+		if(thisOne->energy > 20.0f)
 			POInelastic(thisOne, secondary, nSecondary, doseCounter, absIndex, nVoxels, iseed, mutex2Secondary);
 		return;
 	}
@@ -484,7 +534,7 @@ void hardEvent(PS * thisOne, float stepLength, float4 vox, read_only image2d_t M
 __kernel void propagate(__global PS * particle, __global float8 * doseCounter, 
 		__read_only image3d_t voxels, float3 voxSize, __read_only image2d_t MCS, __read_only image2d_t RSPW, 
 		__read_only image2d_t MSPR, __global PS * secondary, volatile __global uint * nSecondary, int randSeed, __global int * mutex){
-
+		
 	size_t gid = get_global_id(0);
 	PS thisOne = particle[gid];
 	
@@ -496,7 +546,8 @@ __kernel void propagate(__global PS * particle, __global float8 * doseCounter,
 	int3 phantomSize = (int3)(get_image_width(voxels), get_image_height(voxels), get_image_depth(voxels));
 	int nVoxels = phantomSize.x * phantomSize.y * phantomSize.z;
 
-	float stepLength, stepInWater, thisMaxStep, step2bound, energyTransfer, sigma1, sigma2, sigma, sampledStep, variance, theta0, theta, phi, deflection, z1, z2;
+	float stepLength, stepInWater, thisMaxStep, step2bound, energyTransfer, sigma1, sigma2, sigma, sampledStep, variance, theta0, theta, phi, deflection, z1, z2, es;
+	es = 17.5f;
 	float3 voxIndex;
 	int absIndex, crossBound;
 	int iseed[2];
@@ -570,7 +621,7 @@ __kernel void propagate(__global PS * particle, __global float8 * doseCounter,
 
 
 		// deflection
-		theta0 = ES*thisOne.charge*sqrt(stepLength/radiationLength(vox))/beta(&thisOne)/sqrt(momentumSquare(&thisOne));
+		theta0 = es*thisOne.charge*sqrt(stepLength/radiationLength(vox))/beta(&thisOne)/sqrt(momentumSquare(&thisOne));
 		theta = MTGaussian(iseed) * theta0;
 		phi = 2.0f*PI*MTrng(iseed);
 		thisOne.maxSigma = sigma;
