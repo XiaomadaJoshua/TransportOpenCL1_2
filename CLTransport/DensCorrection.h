@@ -7,7 +7,7 @@
 
 #ifndef DENSCORRECTION_H_
 #define DENSCORRECTION_H_
-#include <CL/cl.hpp>
+#include "cl.hpp"
 
 class OpenCLStuff;
 
@@ -21,11 +21,11 @@ public:
 	cl_float * data() const{
 		return densCorrectionFactor;
 	}
-	cl::Image1D & gpu() { return dcf; }
+	cl::Image2D & gpu() { return dcf; }
 
 
 private:
-	cl::Image1D dcf;
+	cl::Image2D dcf;
 	cl_float * densCorrectionFactor;
 	int nFactor;
 };

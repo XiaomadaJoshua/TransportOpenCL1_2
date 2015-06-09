@@ -7,7 +7,7 @@
 
 #ifndef MSPR_H_
 #define MSPR_H_
-#include <CL/cl.hpp>
+#include "cl.hpp"
 
 class OpenCLStuff;
 

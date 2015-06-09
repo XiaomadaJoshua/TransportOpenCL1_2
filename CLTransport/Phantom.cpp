@@ -5,6 +5,7 @@
 #include <iostream>
 #include <fstream>
 #include <string>
+#include <math.h>
 
 Phantom::Phantom(OpenCLStuff & stuff, cl_float3 voxSize_, cl_int3 size_, const DensCorrection & densityCF, const MSPR & massSPR) :voxSize(voxSize_), size(size_)
 {
@@ -210,10 +211,12 @@ void Phantom::output(OpenCLStuff & stuff, std::string & outDir){
 		primaryLET[i] = dose[i].s[3];
 		secondaryLET[i] = dose[i].s[4];
 		heavyDose[i] = dose[i].s[7];
+		if(heavyDose[i] < 0)
+			printf("fuck\n");
 		primaryDose[i] = dose[i].s[5];
 		secondaryDose[i] = dose[i].s[6];
 
-		ofsTotal << totalDose[i] << '\t';
+/*		ofsTotal << totalDose[i] << '\t';
 		ofsPF << primaryFluence[i] << '\t';
 		ofsSF << secondaryFluence[i] << '\t';
 		ofsPLET << primaryLET[i] << '\t';
@@ -242,7 +245,7 @@ void Phantom::output(OpenCLStuff & stuff, std::string & outDir){
 			ofsHeavy << '\n';
 			ofsPD << '\n';
 			ofsSD << '\n';
-		}
+		}*/
 	}
 	ofsTotal.close();
 	ofsPF.close();

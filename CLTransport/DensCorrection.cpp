@@ -39,7 +39,7 @@ bool DensCorrection::setData(const char * filename, const OpenCLStuff & stuff){
 	ifs.close();
 
 	cl::ImageFormat format(CL_R, CL_FLOAT);
-	dcf = cl::Image1D(stuff.context, CL_MEM_READ_ONLY, format, nFactor);
+	dcf = cl::Image2D(stuff.context, CL_MEM_READ_ONLY, format, nFactor, 1);
 	cl::size_t<3> origin;
 	cl::size_t<3> region;
 	region[0] = nFactor;

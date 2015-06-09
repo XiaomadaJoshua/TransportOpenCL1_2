@@ -1,6 +1,7 @@
 #pragma once
-#include <CL/cl.hpp>
+#include "cl.hpp"
 #include "Macro.h"
+#include <vector>
 
 class OpenCLStuff
 {

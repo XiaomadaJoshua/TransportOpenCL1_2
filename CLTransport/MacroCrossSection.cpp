@@ -40,7 +40,7 @@ bool MacroCrossSection::setData(const char * filename, const OpenCLStuff & stuff
 	ifs.close();
 
 	cl::ImageFormat format(CL_RGBA, CL_FLOAT);
-	mcs = cl::Image1D(stuff.context, CL_MEM_READ_ONLY, format, nData);
+	mcs = cl::Image2D(stuff.context, CL_MEM_READ_ONLY, format, nData, 1);
 	cl::size_t<3> origin;
 	cl::size_t<3> region;
 	region[0] = nData;

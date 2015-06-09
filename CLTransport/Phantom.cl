@@ -2,7 +2,7 @@
 
 __kernel void initializeDoseCounter(__global float8 * doseCounter){
 	size_t gid = get_global_id(0);
-	doseCounter[gid] = (float8)(0, 0, 0, 0, 0, 0, 0, 0);
+	doseCounter[gid] = 0.0f;
 }
 
 

@@ -1,5 +1,5 @@
 #pragma once
-#include <CL/cl.hpp>
+#include "cl.hpp"
 #include <vector>
 #include "Macro.h"
 class OpenCLStuff;
@@ -9,7 +9,7 @@ class RSPW;
 class MSPR;
 class Secondary;
 
-struct PS{
+struct __declspec(align(16)) PS{
 	cl_float3 pos, dir;
 	cl_float energy, maxSigma, mass, charge;
 	cl_int ifPrimary;

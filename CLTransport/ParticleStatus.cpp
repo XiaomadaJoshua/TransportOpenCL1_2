@@ -8,7 +8,7 @@
 #include "Macro.h"
 #include "OpenCLStuff.h"
 #include <time.h>
-
+#include <iostream>
 
 ParticleStatus::ParticleStatus(){
 }
@@ -26,6 +26,11 @@ void ParticleStatus::buildProgram(OpenCLStuff & stuff){
 	err = program.build("-cl-single-precision-constant");
 	std::string info;
 	info = program.getBuildInfo<CL_PROGRAM_BUILD_LOG>(stuff.device);
+	if (err != 0){
+		std::cout << "build result: " << err << std::endl;
+		std::cout << info << std::endl;
+	}
+
 }
 
 
@@ -75,7 +80,7 @@ void ParticleStatus::propagate(OpenCLStuff & stuff, Phantom * phantom, MacroCros
 	int err;
 	cl::EnqueueArgs arg(stuff.queue, globalRange);
 	
-	cl::make_kernel < cl::Buffer &, cl::Buffer &, cl::Image3D &, cl_float3, cl::Image1D &, cl::Image1D &, cl::Image2D &, cl::Buffer &, cl::Buffer &, cl_int, cl::Buffer &> propagateKernel(program, "propagate", &err);
+	cl::make_kernel < cl::Buffer &, cl::Buffer &, cl::Image3D &, cl_float3, cl::Image2D &, cl::Image2D &, cl::Image2D &, cl::Buffer &, cl::Buffer &, cl_int, cl::Buffer &> propagateKernel(program, "propagate", &err);
 
 	time_t timer;
 	srand((unsigned int)time(NULL));
