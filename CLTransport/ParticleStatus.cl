@@ -285,7 +285,7 @@ void scoreHeavy(global float8 * doseCounter, int absIndex, int nVoxels, float en
 
 void store(PS * newOne, __global PS * secondary, volatile __global uint * nSecondary, global int * mutex2Secondary){
 	if(*nSecondary == 0){
-//		printf("\n secondary particle overflow!!!\n");
+		printf("\n secondary particle overflow!!!\n");
 		return;	
 	}
 	
@@ -497,6 +497,7 @@ __kernel void propagate(__global PS * particle, __global float8 * doseCounter,
 		
 	size_t gid = get_global_id(0);
 	PS thisOne = particle[gid];
+//	printf("size of PS in kernel = %d\n", sizeof(PS));
 	
 //	if(thisOne.ifPrimary == 0){
 //		printf("simulate secondary proton\n");

@@ -10,7 +10,7 @@ Secondary::Secondary(OpenCLStuff & stuff)
 	int err;
 	particleStatus.push_back(cl::Buffer(stuff.context, CL_MEM_READ_WRITE, sizeof(PS)*size, NULL, &err));
 	nSecondary = cl::Buffer(stuff.context, CL_MEM_READ_WRITE, sizeof(cl_uint), NULL, &err);
-	err = stuff.queue.enqueueWriteBuffer(nSecondary, CL_TRUE, 0, sizeof(cl_int), &size);
+	err = stuff.queue.enqueueWriteBuffer(nSecondary, CL_TRUE, 0, sizeof(cl_uint), &size);
 }
 
 void Secondary::propagate(OpenCLStuff & stuff, Phantom * phantom, MacroCrossSection * macroSigma,
@@ -19,7 +19,7 @@ void Secondary::propagate(OpenCLStuff & stuff, Phantom * phantom, MacroCrossSect
 	stuff.queue.enqueueReadBuffer(nSecondary, CL_TRUE, 0, sizeof(cl_uint), &nParticles);
 	while (size - nParticles > stuff.nBatch()){
 		particleStatus.push_back(cl::Buffer(stuff.context, CL_MEM_READ_WRITE, sizeof(PS)*stuff.nBatch()));
-		stuff.queue.enqueueCopyBuffer(particleStatus[0], particleStatus[1], sizeof(PS)*nParticles, 0, sizeof(PS)*stuff.nBatch());
+		stuff.queue.enqueueCopyBuffer(particleStatus[0], particleStatus[1], sizeof(PS)*nParticles, 0, sizeof(PS)*stuff.nBatch());		
 		nParticles += stuff.nBatch();
 		stuff.queue.enqueueWriteBuffer(nSecondary, CL_TRUE, 0, sizeof(cl_uint), &nParticles);
 		globalRange = cl::NDRange(stuff.nBatch());
@@ -35,8 +35,10 @@ void Secondary::clear(OpenCLStuff & stuff, Phantom * phantom, MacroCrossSection 
 	stuff.queue.enqueueReadBuffer(nSecondary, CL_TRUE, 0, sizeof(cl_uint), &nParticles);
 	int err;
 	while (nParticles != size){
-		particleStatus.push_back(cl::Buffer(stuff.context, CL_MEM_READ_WRITE, sizeof(PS)*(size - nParticles)));
+		particleStatus.push_back(cl::Buffer(stuff.context, CL_MEM_READ_WRITE, sizeof(PS)*(size - nParticles), NULL, &err));
 		err = stuff.queue.enqueueCopyBuffer(particleStatus[0], particleStatus[1], sizeof(PS)*nParticles, 0, sizeof(PS)*(size - nParticles));
+
+		stuff.queue.finish();
 
 		PS * particleTest = new PS[size - nParticles];
 		err = stuff.queue.enqueueReadBuffer(particleStatus[0], CL_TRUE, sizeof(PS)*(nParticles), sizeof(PS)*(size - nParticles), particleTest);

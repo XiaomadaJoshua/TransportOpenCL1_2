@@ -211,8 +211,6 @@ void Phantom::output(OpenCLStuff & stuff, std::string & outDir){
 		primaryLET[i] = dose[i].s[3];
 		secondaryLET[i] = dose[i].s[4];
 		heavyDose[i] = dose[i].s[7];
-		if(heavyDose[i] < 0)
-			printf("fuck\n");
 		primaryDose[i] = dose[i].s[5];
 		secondaryDose[i] = dose[i].s[6];
 
