@@ -473,7 +473,7 @@ void hardEvent(PS * thisOne, float stepLength, float4 vox, read_only image2d_t M
 		ionization(thisOne, doseCounter, absIndex, nVoxels, iseed, stepLength);
 		return;
 	}
-	else if(rand < sigIon + sigPPE){
+/*	else if(rand < sigIon + sigPPE){
 		if(thisOne->energy > PPETHRESHOLD)
 			PPElastic(thisOne, secondary, nSecondary, iseed, mutex2Secondary);
 		return;
@@ -487,7 +487,7 @@ void hardEvent(PS * thisOne, float stepLength, float4 vox, read_only image2d_t M
 		if(thisOne->energy > POITHRESHOLD)
 			POInelastic(thisOne, secondary, nSecondary, doseCounter, absIndex, nVoxels, iseed, mutex2Secondary);
 		return;
-	}
+	}*/
 }
 
 
@@ -584,7 +584,11 @@ __kernel void propagate(__global PS * particle, __global float8 * doseCounter,
 
 
 		// deflection
-		theta0 = ES*thisOne.charge*sqrt(stepLength/radiationLength(vox))/beta(&thisOne)/sqrt(momentumSquare(&thisOne));
+		if(thisOne.energy < 70.0f)
+			es = 15.5f;
+
+
+		theta0 = es*thisOne.charge*sqrt(stepLength/radiationLength(vox))/beta(&thisOne)/sqrt(momentumSquare(&thisOne));
 		theta = MTGaussian(iseed) * theta0;
 		phi = 2.0f*PI*MTrng(iseed);
 		thisOne.maxSigma = sigma;

@@ -6,7 +6,6 @@
 #define MO 14903.3460795634 //oxygen mass in MeV
 #define MINELECTRONENERGY 0.1 // MeV
 #define TWOPIRE2MENEW 0.08515495201157892 //2pi*r_e^2*m_e*n_{ew}, where r_e in cm, m_e in eV, n_ew = 3.34e23/cm^3
-#define ES 17.5	// Es parameter for multiple scatter angle, in MeV
 #define XW 36.514 	//radiation length of water, in cm
 #define PI 3.1415926535897932384626433
 #define SECONDPARTICLEVOLUME 10000
