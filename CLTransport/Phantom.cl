@@ -1,12 +1,12 @@
 #include "Macro.h"
 
-__kernel void initializeDoseCounter(__global float8 * doseCounter){
+__kernel void initializeDoseCounter(__global float * doseCounter){
 	size_t gid = get_global_id(0);
 	doseCounter[gid] = 0.0f;
 }
 
 
-__kernel void finalize(__global float8 * doseBuff, read_only image3d_t voxels, float3 voxSize){
+/*__kernel void finalize(__global float8 * doseBuff, read_only image3d_t voxels, float3 voxSize){
 	size_t idx = get_global_id(0);
 	size_t idy = get_global_id(1);
 	size_t idz = get_global_id(2);
@@ -33,9 +33,9 @@ __kernel void finalize(__global float8 * doseBuff, read_only image3d_t voxels, f
 //	doseCounter[absId].s0 =  doseCounter[absId].s0/mass;
 
 //	printf("mass = %f\n", mass);
-}
+}*/
 
-__kernel void tempStore(__global float8 * doseCounter, __global float8 * doseBuff){
+__kernel void tempStore(__global float * doseCounter, __global float * doseBuff){
 	size_t idx = get_global_id(0);
 	size_t idy = get_global_id(1);
 	size_t idz = get_global_id(2);
@@ -43,6 +43,11 @@ __kernel void tempStore(__global float8 * doseCounter, __global float8 * doseBuf
 	int nVoxels = get_global_size(0)*get_global_size(1)*get_global_size(2);
 	for(int i  = 0; i < NDOSECOUNTERS; i++){
 		doseBuff[absId] += doseCounter[absId + i*nVoxels];
+//		if(doseCounter[absId + i*nVoxels] != 0)
+//			printf("%f\t", doseCounter[absId + i*nVoxels]);
 		doseCounter[absId + i*nVoxels] = 0;
 	}
+//	if(doseBuff[absId] != 0)
+//		printf("buff\t%f\n", doseBuff[absId]);
+
 }

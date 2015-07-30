@@ -1,0 +1,1 @@
+g++ main.cpp -o TransportCL -std=c++0x -I/usr/local/cuda-5.5/include -L/usr/lib -lOpenCL

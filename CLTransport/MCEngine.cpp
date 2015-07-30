@@ -62,7 +62,8 @@ MCEngine::MCEngine(const char * file){
 	ifs >> phantomIso.s[0] >> phantomIso.s[1] >> phantomIso.s[2] >> ws;
 	cl_int3 size;
 	ifs >> size.s[0] >> size.s[1] >> size.s[2] >> ws;
-	phantom = new Phantom(stuff, voxSize, size, *densCorrection, *mspr);
+	std::string CTFile("CTVolume");
+	phantom = new Phantom(stuff, voxSize, size, *densCorrection, *mspr, CTFile.c_str());
 
 	//initialize secondary particles container
 	secondary = new Secondary(stuff);

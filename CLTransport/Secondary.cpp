@@ -15,7 +15,7 @@ Secondary::Secondary(OpenCLStuff & stuff)
 
 void Secondary::propagate(OpenCLStuff & stuff, Phantom * phantom, MacroCrossSection * macroSigma,
 	RSPW * resStpPowWater, MSPR * massStpPowRatio, ParticleStatus * secondary){
-
+	stuff.queue.finish();
 	stuff.queue.enqueueReadBuffer(nSecondary, CL_TRUE, 0, sizeof(cl_uint), &nParticles);
 	while (size - nParticles > stuff.nBatch()){
 		particleStatus.push_back(cl::Buffer(stuff.context, CL_MEM_READ_WRITE, sizeof(PS)*stuff.nBatch()));

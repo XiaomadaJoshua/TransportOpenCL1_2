@@ -7,7 +7,7 @@ class MSPR;
 class Phantom
 {
 public:
-	Phantom(OpenCLStuff &, cl_float3 voxSize_, cl_int3 size_, const DensCorrection & densityCF, const MSPR & massSPR);
+	Phantom(OpenCLStuff &, cl_float3 voxSize_, cl_int3 size_, const DensCorrection & densityCF, const MSPR & massSPR, const char* CTFile = NULL);
 	virtual ~Phantom();
 	cl::Image3D & voxelGPU(){ return voxelAttributes; }
 	cl::Buffer & doseCounterGPU(){ return doseCounter; }
@@ -27,13 +27,13 @@ private:
 	cl::Program program;
 
 	cl_float * totalDose;
-	cl_float * primaryFluence;
+/*	cl_float * primaryFluence;
 	cl_float * secondaryFluence;
 	cl_float * primaryLET;
 	cl_float * secondaryLET;
 	cl_float * heavyDose;
 	cl_float * primaryDose;
-	cl_float * secondaryDose;
+	cl_float * secondaryDose;*/
 
 	cl::Buffer doseBuff;
 

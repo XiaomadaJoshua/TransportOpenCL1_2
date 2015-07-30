@@ -1,3 +1,5 @@
+#define _CRT_SECURE_NO_DEPRECATE
+#include <stdio.h>
 #include "Phantom.h"
 #include "OpenCLStuff.h"
 #include "DensCorrection.h"
@@ -7,7 +9,9 @@
 #include <string>
 #include <math.h>
 
-Phantom::Phantom(OpenCLStuff & stuff, cl_float3 voxSize_, cl_int3 size_, const DensCorrection & densityCF, const MSPR & massSPR) :voxSize(voxSize_), size(size_)
+
+Phantom::Phantom(OpenCLStuff & stuff, cl_float3 voxSize_, cl_int3 size_, const DensCorrection & densityCF, const MSPR & massSPR, const char* CTFile)
+	:voxSize(voxSize_), size(size_)
 {
 	int err;
 	cl::ImageFormat format(CL_RGBA, CL_FLOAT);
@@ -16,14 +20,41 @@ Phantom::Phantom(OpenCLStuff & stuff, cl_float3 voxSize_, cl_int3 size_, const D
 	int nVoxels = size.s[0] * size.s[1] * size.s[2];
 
 	attributes = new cl_float4[nVoxels];
-	for (int i = 0; i < nVoxels; i++){
-		attributes[i].s[0] = 0.0f; // ct value
-		attributes[i].s[1] = setMaterial(attributes[i].s[0], massSPR); // material number
-		attributes[i].s[2] = ct2den(attributes[i].s[0]); // density
-		int ind = attributes[i].s[0] + 1000;
-		ind = ind > densityCF.size() - 1 ? densityCF.size() - 1 : ind;
-		attributes[i].s[2] *= densityCF[ind];
-		attributes[i].s[3] = ct2eden(attributes[i].s[1], attributes[i].s[2]); // edensity
+
+	if (CTFile != NULL){
+		FILE * fp = fopen(CTFile, "r");
+		if (fp == NULL)
+		{
+			std::cout << "Error in opening CT file" << std::endl;
+			exit(1);
+		}
+		short * CT = new short[nVoxels];
+		printf("Reading CT number from %s\n", CTFile);
+
+		fread(CT, sizeof(short)*nVoxels, 1, fp);
+		fclose(fp);
+
+		//initialize from CT file
+		for (int i = 0; i < nVoxels; i++){
+			attributes[i].s[0] = (float)CT[i]; // ct value
+			attributes[i].s[0] = attributes[i].s[0] > massSPR.lookStartingHU()[0] ? attributes[i].s[0] : massSPR.lookStartingHU()[0];
+			attributes[i].s[1] = setMaterial(attributes[i].s[0], massSPR); // material number
+			attributes[i].s[2] = ct2den(attributes[i].s[0]); // density
+			int ind = attributes[i].s[0] + 1000;
+			ind = ind > densityCF.size() - 1 ? densityCF.size() - 1 : ind;
+			attributes[i].s[2] *= densityCF[ind];
+			attributes[i].s[3] = ct2eden(attributes[i].s[1], attributes[i].s[2]); // edensity
+		}
+	}
+	else{
+		//initialize a water phantom
+		std::cout << "initialize a water phantom" << std::endl;
+		for (int i = 0; i < nVoxels; i++){
+			attributes[i].s[0] = 0.0f; // ct value
+			attributes[i].s[1] = setMaterial(attributes[i].s[0], massSPR); // material number
+			attributes[i].s[2] = 1.0; // density
+			attributes[i].s[3] = 1.0; // edensity
+		}
 	}
 
 	cl::size_t<3> origin;
@@ -31,11 +62,7 @@ Phantom::Phantom(OpenCLStuff & stuff, cl_float3 voxSize_, cl_int3 size_, const D
 	region[0] = size.s[0];
 	region[1] = size.s[1];
 	region[2] = size.s[2];
-	stuff.queue.enqueueWriteImage(voxelAttributes, CL_TRUE, origin, region, 0, 0, attributes);
-
-	// 0 in float8 is total dose, 1 in float8 is primary fluence, 2 in float8 is secondary fluence, 3 in float8 is primary LET, 4 in float8 is secondary LET, 5 in float8 is primary dose,
-	// 6 in float8 is secondary dose, 7 in float8 is heavy dose.
-	doseCounter = cl::Buffer(stuff.context, CL_MEM_READ_WRITE, sizeof(cl_float8)*nVoxels*NDOSECOUNTERS, NULL, &err);
+	err = stuff.queue.enqueueWriteImage(voxelAttributes, CL_TRUE, origin, region, 0, 0, attributes);
 
 	std::string source;
 	OpenCLStuff::convertToString("Phantom.cl", source);
@@ -44,13 +71,16 @@ Phantom::Phantom(OpenCLStuff & stuff, cl_float3 voxSize_, cl_int3 size_, const D
 	std::string info;
 	info = program.getBuildInfo<CL_PROGRAM_BUILD_LOG>(stuff.device);
 	cl::make_kernel<cl::Buffer &> initDoseCounterKernel(program, "initializeDoseCounter", &err);
-
+	
+	// 0 in float8 is total dose, 1 in float8 is primary fluence, 2 in float8 is secondary fluence, 3 in float8 is primary LET, 4 in float8 is secondary LET, 5 in float8 is primary dose,
+	// 6 in float8 is secondary dose, 7 in float8 is heavy dose.
+	doseCounter = cl::Buffer(stuff.context, CL_MEM_READ_WRITE, sizeof(cl_float)*nVoxels*NDOSECOUNTERS, NULL, &err);
 	cl::NDRange globalRange(nVoxels*NDOSECOUNTERS);
 	cl::EnqueueArgs arg(stuff.queue, globalRange);
 	initDoseCounterKernel(arg, doseCounter);
 //	err = stuff.queue.finish();
 
-	doseBuff = cl::Buffer(stuff.context, CL_MEM_READ_WRITE, sizeof(cl_float8)*nVoxels, NULL, &err);
+	doseBuff = cl::Buffer(stuff.context, CL_MEM_READ_WRITE, sizeof(cl_float)*nVoxels, NULL, &err);
 	globalRange = cl::NDRange(nVoxels);
 	cl::EnqueueArgs arg2(stuff.queue, globalRange);
 	initDoseCounterKernel(arg2, doseBuff);
@@ -61,13 +91,13 @@ Phantom::~Phantom()
 {
 	delete[] attributes;
 	delete[] totalDose;
-	delete[] primaryFluence;
+/*	delete[] primaryFluence;
 	delete[] secondaryFluence;
 	delete[] primaryLET;
 	delete[] secondaryLET;
 	delete[] heavyDose;
 	delete[] primaryDose;
-	delete[] secondaryDose;
+	delete[] secondaryDose;*/
 }
 
 
@@ -159,11 +189,20 @@ void Phantom::finalize(OpenCLStuff & stuff){
 	cl::make_kernel<cl::Buffer &, cl::Image3D &, cl_float3> finalizeKernel(program, "finalize");
 	cl::NDRange globalRange(size.s[0], size.s[1], size.s[2]);
 	cl::EnqueueArgs arg(stuff.queue, globalRange);
-	finalizeKernel(arg, doseBuff, voxelAttributes, voxSize);
+//	finalizeKernel(arg, doseBuff, voxelAttributes, voxSize);
 }
 
 void Phantom::output(OpenCLStuff & stuff, std::string & outDir){
 	int nVoxels = size.s[0] * size.s[1] * size.s[2];
+	cl_float * dose = new cl_float[nVoxels];
+	stuff.queue.enqueueReadBuffer(doseBuff, CL_TRUE, 0, sizeof(cl_float) * nVoxels, dose);
+
+	std::string fileTotalBin = outDir + "totalDose.bin";
+	std::ofstream ofsTotalBin(fileTotalBin, std::ios::out | std::ios::trunc | std::fstream::binary);
+	ofsTotalBin.write((const char *)(dose), nVoxels * sizeof(cl_float) / sizeof(char));
+	ofsTotalBin.close();
+
+/*	int nVoxels = size.s[0] * size.s[1] * size.s[2];
 	cl_float8 * dose = new cl_float8[nVoxels];
 	stuff.queue.finish();
 	stuff.queue.enqueueReadBuffer(doseBuff, CL_TRUE, 0, sizeof(cl_float8) * nVoxels, dose);
@@ -214,7 +253,7 @@ void Phantom::output(OpenCLStuff & stuff, std::string & outDir){
 		primaryDose[i] = dose[i].s[5];
 		secondaryDose[i] = dose[i].s[6];
 
-/*		ofsTotal << totalDose[i] << '\t';
+		ofsTotal << totalDose[i] << '\t';
 		ofsPF << primaryFluence[i] << '\t';
 		ofsSF << secondaryFluence[i] << '\t';
 		ofsPLET << primaryLET[i] << '\t';
@@ -243,7 +282,7 @@ void Phantom::output(OpenCLStuff & stuff, std::string & outDir){
 			ofsHeavy << '\n';
 			ofsPD << '\n';
 			ofsSD << '\n';
-		}*/
+		}
 	}
 	ofsTotal.close();
 	ofsPF.close();
@@ -284,7 +323,7 @@ void Phantom::output(OpenCLStuff & stuff, std::string & outDir){
 
 	ofsSD.open(fileSDBin, std::fstream::out | std::fstream::trunc | std::fstream::binary);
 	ofsSD.write((const char *)(secondaryDose), nVoxels * sizeof(cl_float) / sizeof(char));
-	ofsSD.close();
+	ofsSD.close();*/
 }
 
 void Phantom::tempStore(OpenCLStuff & stuff){

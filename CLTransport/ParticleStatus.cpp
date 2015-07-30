@@ -92,5 +92,5 @@ void ParticleStatus::propagate(OpenCLStuff & stuff, Phantom * phantom, MacroCros
 	stuff.queue.finish();
 	propagateKernel(arg, particleStatus.back(), phantom->doseCounterGPU(), phantom->voxelGPU(), phantom->voxelSize(), macroSigma->gpu(),
 		resStpPowWater->gpu(), massStpPowRatio->gpu(), secondary->particleStatus[0], secondary->nSecondBuffer(), randSeed, mutex);
-
+	stuff.queue.finish();
 }
