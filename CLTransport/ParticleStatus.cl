@@ -239,48 +239,62 @@ inline void atomicAdd(volatile global float * source, const float operand) {
 }
 
 
-	// 0 in float8 is total dose, 1 in float8 is primary fluence, 2 in float8 is secondary fluence, 3 in float8 is primary LET, 4 in float8 is secondary LET, 5 in float8 is primary dose,
+	// 0 in float8 is total dose, 1 in float8 is primary fluence, 2 in float8 is secondary fluence, 3 in float8 is LET, 4 in float8 is nothing, 5 in float8 is primary dose,
 	// 6 in float8 is secondary dose, 7 in float8 is heavy dose.
-void score(global float8 * doseCounter, int absIndex, int nVoxels, float energyTransfer, float stepLength, int ifPrimary, int * iseed){
+void score(global float8 * doseCounter, global float8 * errorCounter, int absIndex, int nVoxels, float energyTransfer, float stepLength, int ifPrimary, int * iseed){
 	// choose a dose counter
 	int doseCounterId = convert_int_rtn(MTrng(iseed)*NDOSECOUNTERS);
 
 	volatile global float * counter = &doseCounter[absIndex + doseCounterId * nVoxels];
+	volatile global float * counter2 = &errorCounter[absIndex + doseCounterId * nVoxels];
 	atomicAdd(counter, energyTransfer);
+	atomicAdd(counter2, energyTransfer*energyTransfer);
+
+	if(stepLength > 0){
+		atomicAdd(counter + 3, energyTransfer*energyTransfer/stepLength);
+		atomicAdd(counter2 + 3, energyTransfer*energyTransfer*energyTransfer*energyTransfer/stepLength/stepLength);
+	}
+
 	if(ifPrimary == 1){
 		atomicAdd(counter + 5, energyTransfer);
-		if(stepLength > 0)
-			atomicAdd(counter + 3, energyTransfer*energyTransfer/stepLength);
+		atomicAdd(counter2 + 5, energyTransfer*energyTransfer);
 	}
 	else{
 		atomicAdd(counter + 6, energyTransfer);
-		if(stepLength > 0)
-			atomicAdd(counter + 4, energyTransfer*energyTransfer/stepLength);
+		atomicAdd(counter2 + 6, energyTransfer*energyTransfer);
 	}
 }
 
-void scoreFluence(global float8 * doseCounter, int absIndex, int nVoxels, int ifPrimary, float fluence, global int * mutex, int * iseed){
+void scoreFluence(global float8 * doseCounter, global float8 * errorCounter, int absIndex, int nVoxels, int ifPrimary, float fluence, global int * mutex, int * iseed){
 	// choose a dose counter
 	int doseCounterId = convert_int_rtn(MTrng(iseed)*NDOSECOUNTERS);
 
 	volatile global float * counter = &doseCounter[absIndex + doseCounterId * nVoxels];
-	if(ifPrimary == 1)
+	volatile global float * counter2 = &errorCounter[absIndex + doseCounterId * nVoxels];
+	if(ifPrimary == 1){
 		atomicAdd(counter + 1, fluence);
+		atomicAdd(counter2 + 1, fluence*fluence);
+	}
 
-	else
+	else{
 		atomicAdd(counter + 2, fluence);
+		atomicAdd(counter2 + 2, fluence*fluence);
+	}
 
 //	if(absIndex == 25*51 + 25 && ifPrimary == 1)
 //		printf("entrance fluence %f\n", fluence);
 
 }
 
-void scoreHeavy(global float8 * doseCounter, int absIndex, int nVoxels, float energyTransfer, int * iseed){
+void scoreHeavy(global float8 * doseCounter, global float8 * errorCounter, int absIndex, int nVoxels, float energyTransfer, int * iseed){
 	// choose a dose counter
 	int doseCounterId = convert_int_rtn(MTrng(iseed)*NDOSECOUNTERS);
 	volatile global float * counter = &doseCounter[absIndex + doseCounterId * nVoxels];
+	volatile global float * counter2 = &errorCounter[absIndex + doseCounterId * nVoxels];
 	atomicAdd(counter, energyTransfer);
 	atomicAdd(counter + 7, energyTransfer);
+	atomicAdd(counter2, energyTransfer*energyTransfer);
+	atomicAdd(counter2 + 7, energyTransfer*energyTransfer);
 }
 
 void store(PS * newOne, __global PS * secondary, volatile __global uint * nSecondary, global int * mutex2Secondary){
@@ -298,7 +312,7 @@ void store(PS * newOne, __global PS * secondary, volatile __global uint * nSecon
 }
 
 
-void ionization(PS * thisOne, global float8 * doseCounter, int absIndex, int nVoxels, int * iseed, float stepLength){
+void ionization(PS * thisOne, global float8 * doseCounter, global float8 * errorCounter, int absIndex, int nVoxels, int * iseed, float stepLength){
 	
 
 	float E = thisOne->energy + thisOne->mass;
@@ -314,7 +328,7 @@ void ionization(PS * thisOne, global float8 * doseCounter, int absIndex, int nVo
 
 
 	update(thisOne, 0.0f, Te, 0.0f, 0.0f, 0, 0.0f);
-	score(doseCounter, absIndex, nVoxels, Te, stepLength, thisOne->ifPrimary, iseed);
+	score(doseCounter, errorCounter, absIndex, nVoxels, Te, stepLength, thisOne->ifPrimary, iseed);
 
 }
 
@@ -374,10 +388,10 @@ void PPElastic(PS * thisOne, __global PS * secondary, volatile __global uint * n
 	store(&newOne, secondary, nSecondary, mutex2Secondary);
 }
 
-void POElastic(PS * thisOne, global float8 * doseCounter, int absIndex, int nVoxels, int * iseed){
+void POElastic(PS * thisOne, global float8 * doseCounter, global float8 * errorCounter, int absIndex, int nVoxels, int * iseed){
 	// sample energy transferred to oxygen
 	if(thisOne->energy < 7.2f){
-		scoreHeavy(doseCounter, absIndex, nVoxels, thisOne->energy, iseed);
+		scoreHeavy(doseCounter, errorCounter, absIndex, nVoxels, thisOne->energy, iseed);
 		thisOne->energy = 0;
 		return;
 	}
@@ -406,10 +420,11 @@ void POElastic(PS * thisOne, global float8 * doseCounter, int absIndex, int nVox
 	phi = MTrng(iseed)*2.0f*PI;
 
 	update(thisOne, 0.0f, energyTransfer, theta, phi, 0, 0.0f);
-	scoreHeavy(doseCounter, absIndex, nVoxels, energyTransfer, iseed);
+	scoreHeavy(doseCounter, errorCounter, absIndex, nVoxels, energyTransfer, iseed);
 }
 
-void POInelastic(PS * thisOne, __global PS * secondary, volatile __global uint * nSecondary, global float8 * doseCounter, int absIndex, int nVoxels, int * iseed, global int * mutex2Secondary){
+void POInelastic(PS * thisOne, __global PS * secondary, volatile __global uint * nSecondary, global float8 * doseCounter, 
+				global float8 * errorCounter, int absIndex, int nVoxels, int * iseed, global int * mutex2Secondary){
 	float rand = MTrng(iseed);
 
 	float bindEnergy = EBIND;
@@ -452,13 +467,13 @@ void POInelastic(PS * thisOne, __global PS * secondary, volatile __global uint *
 		bindEnergy *= 0.5f;
 		remainEnergy -= energy2SecondParticle;
 	}
-	scoreHeavy(doseCounter, absIndex, nVoxels, energyDeposit, iseed);
+	scoreHeavy(doseCounter, errorCounter, absIndex, nVoxels, energyDeposit, iseed);
 	update(thisOne, 0.0f, thisOne->energy, 0.0f, 0.0f, 0, 0.0f);
 }
 
 
-void hardEvent(PS * thisOne, float stepLength, float4 vox, read_only image2d_t MCS, global float8 * doseCounter, int absIndex, int nVoxels, global PS * secondary, volatile __global uint * nSecondary, 
-				int * iseed, global int * mutex2Secondary){
+void hardEvent(PS * thisOne, float stepLength, float4 vox, read_only image2d_t MCS, global float8 * doseCounter, global float8 * errorCounter,
+			 int absIndex, int nVoxels, global PS * secondary, volatile __global uint * nSecondary, int * iseed, global int * mutex2Secondary){
 	sampler_t sampler = CLK_NORMALIZED_COORDS_FALSE | CLK_ADDRESS_CLAMP_TO_EDGE | CLK_FILTER_LINEAR;
 	float4 mcs = read_imagef(MCS, sampler, (float2)(thisOne->energy/0.5f - 0.5f, 0.5f));
 	float sigIon = mcs.s0*vox.s3;
@@ -470,28 +485,28 @@ void hardEvent(PS * thisOne, float stepLength, float4 vox, read_only image2d_t M
 	float rand = MTrng(iseed);
 	rand *= thisOne->maxSigma > sig ? thisOne->maxSigma : sig;
 	if(rand < sigIon){
-		ionization(thisOne, doseCounter, absIndex, nVoxels, iseed, stepLength);
+		ionization(thisOne, doseCounter, errorCounter, absIndex, nVoxels, iseed, stepLength);
 		return;
 	}
-/*	else if(rand < sigIon + sigPPE){
+	else if(rand < sigIon + sigPPE){
 		if(thisOne->energy > PPETHRESHOLD)
 			PPElastic(thisOne, secondary, nSecondary, iseed, mutex2Secondary);
 		return;
 	}
 	else if(rand < sigIon + sigPPE + sigPOE){
 		if(thisOne->energy > POETHRESHOLD)
-			POElastic(thisOne, doseCounter, absIndex, nVoxels, iseed);
+			POElastic(thisOne, doseCounter, errorCounter, absIndex, nVoxels, iseed);
 		return;
 	} 
 	else if(rand < sigIon+sigPPE + sigPOE + sigPOI){
 		if(thisOne->energy > POITHRESHOLD)
-			POInelastic(thisOne, secondary, nSecondary, doseCounter, absIndex, nVoxels, iseed, mutex2Secondary);
+			POInelastic(thisOne, secondary, nSecondary, doseCounter, errorCounter, absIndex, nVoxels, iseed, mutex2Secondary);
 		return;
-	}*/
+	}
 }
 
 
-__kernel void propagate(__global PS * particle, __global float8 * doseCounter, 
+__kernel void propagate(__global PS * particle, __global float8 * doseCounter, __global float8 * errorCounter,
 		__read_only image3d_t voxels, float3 voxSize, __read_only image2d_t MCS, __read_only image2d_t RSPW, 
 		__read_only image2d_t MSPR, __global PS * secondary, volatile __global uint * nSecondary, int randSeed, __global int * mutex){
 		
@@ -539,8 +554,8 @@ __kernel void propagate(__global PS * particle, __global float8 * doseCounter,
 		if (thisOne.energy <= MINPROTONENERGY){
 			stepInWater = thisOne.energy / read_imagef(RSPW, dataSampler, (float2)(thisOne.energy/0.5f - 0.5f, 0.5f)).s0;
 			stepLength = stepInWater*WATERDENSITY / vox.s2 / read_imagef(MSPR, dataSampler, (float2)(thisOne.energy - 0.5f, vox.s1 + 0.5f)).s0;
-			score(doseCounter, absIndex, nVoxels, thisOne.energy, stepLength, thisOne.ifPrimary, iseed);
-			scoreFluence(doseCounter, absIndex, nVoxels, thisOne.ifPrimary, stepLength, mutex, iseed);
+			score(doseCounter, errorCounter, absIndex, nVoxels, thisOne.energy, stepLength, thisOne.ifPrimary, iseed);
+			scoreFluence(doseCounter, errorCounter, absIndex, nVoxels, thisOne.ifPrimary, stepLength, mutex, iseed);
 			return;
 		}
 
@@ -593,14 +608,14 @@ __kernel void propagate(__global PS * particle, __global float8 * doseCounter,
 		phi = 2.0f*PI*MTrng(iseed);
 		thisOne.maxSigma = sigma;
 		update(&thisOne, stepLength, energyTransfer, theta, phi, crossBound, 0.0f);
-		score(doseCounter, absIndex, nVoxels, energyTransfer, stepLength, thisOne.ifPrimary, iseed);
-		scoreFluence(doseCounter, absIndex, nVoxels, thisOne.ifPrimary, stepLength, mutex, iseed);
+		score(doseCounter, errorCounter, absIndex, nVoxels, energyTransfer, stepLength, thisOne.ifPrimary, iseed);
+		scoreFluence(doseCounter, errorCounter, absIndex, nVoxels, thisOne.ifPrimary, stepLength, mutex, iseed);
 
 		//hard event
 		if(!ifHard)
 			continue;
 
-		hardEvent(&thisOne, stepLength, vox, MCS, doseCounter, absIndex, nVoxels, secondary, nSecondary, iseed, mutex);
+		hardEvent(&thisOne, stepLength, vox, MCS, doseCounter, errorCounter, absIndex, nVoxels, secondary, nSecondary, iseed, mutex);
 
 
 	}

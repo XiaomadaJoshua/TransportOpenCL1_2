@@ -14,7 +14,7 @@
 
 
 int main(){
-	int temp;
+//	cl_float8 * temp = new cl_float8[1000000]();
 //	std::cin >> temp;
 	MCEngine mc("proton_config");
 	mc.simulate(MINPROTONENERGY);

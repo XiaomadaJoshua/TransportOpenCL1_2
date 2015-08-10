@@ -49,7 +49,6 @@ MCEngine::MCEngine(const char * file){
 	ifs.getline(buff, 300);
 	float energy;
 	cl_float2 bWidth;
-	unsigned long nPaths;
 	cl_float3 bSource;
 	ifs >> bWidth.s[0] >> ws >> bWidth.s[1] >> ws >> energy >> ws >> nPaths >> ws;
 	ifs >> bSource.s[0] >> bSource.s[1] >> bSource.s[2] >> ws;
@@ -88,7 +87,7 @@ void MCEngine::simulate(float minEnergy){
 	}
 	secondary->clear(stuff, phantom, macroSigma, rspw, mspr);
 	phantom->tempStore(stuff);
-	phantom->finalize(stuff);
+	phantom->finalize(stuff, nPaths);
 	phantom->output(stuff, outDir);
 
 	std::cout << "number of batches: " << i << std::endl;

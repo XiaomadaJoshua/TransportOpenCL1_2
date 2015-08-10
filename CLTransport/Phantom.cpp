@@ -36,6 +36,7 @@ Phantom::Phantom(OpenCLStuff & stuff, cl_float3 voxSize_, cl_int3 size_, const D
 	// 0 in float8 is total dose, 1 in float8 is primary fluence, 2 in float8 is secondary fluence, 3 in float8 is primary LET, 4 in float8 is secondary LET, 5 in float8 is primary dose,
 	// 6 in float8 is secondary dose, 7 in float8 is heavy dose.
 	doseCounter = cl::Buffer(stuff.context, CL_MEM_READ_WRITE, sizeof(cl_float8)*nVoxels*NDOSECOUNTERS, NULL, &err);
+	errorCounter = cl::Buffer(stuff.context, CL_MEM_READ_WRITE, sizeof(cl_float8)*nVoxels*NDOSECOUNTERS, NULL, &err);
 
 	std::string source;
 	OpenCLStuff::convertToString("Phantom.cl", source);
@@ -48,12 +49,15 @@ Phantom::Phantom(OpenCLStuff & stuff, cl_float3 voxSize_, cl_int3 size_, const D
 	cl::NDRange globalRange(nVoxels*NDOSECOUNTERS);
 	cl::EnqueueArgs arg(stuff.queue, globalRange);
 	initDoseCounterKernel(arg, doseCounter);
+	initDoseCounterKernel(arg, errorCounter);
 //	err = stuff.queue.finish();
 
 	doseBuff = cl::Buffer(stuff.context, CL_MEM_READ_WRITE, sizeof(cl_float8)*nVoxels, NULL, &err);
+	errorBuff = cl::Buffer(stuff.context, CL_MEM_READ_WRITE, sizeof(cl_float8)*nVoxels, NULL, &err);
 	globalRange = cl::NDRange(nVoxels);
 	cl::EnqueueArgs arg2(stuff.queue, globalRange);
 	initDoseCounterKernel(arg2, doseBuff);
+	initDoseCounterKernel(arg2, errorBuff);
 }
 
 
@@ -63,11 +67,20 @@ Phantom::~Phantom()
 	delete[] totalDose;
 	delete[] primaryFluence;
 	delete[] secondaryFluence;
-	delete[] primaryLET;
+	delete[] LET;
 	delete[] secondaryLET;
 	delete[] heavyDose;
 	delete[] primaryDose;
 	delete[] secondaryDose;
+
+	delete[] doseErr;
+	delete[] primaryFluenceErr;
+	delete[] secondaryFluenceErr;
+	delete[] LETErr;
+	delete[] secondaryLETErr;
+	delete[] heavyDoseErr;
+	delete[] primaryDoseErr;
+	delete[] secondaryDoseErr;
 }
 
 
@@ -155,141 +168,150 @@ cl_float Phantom::ct2eden(cl_float material, cl_float density) const{
 	return edensity;
 }
 
-void Phantom::finalize(OpenCLStuff & stuff){
-	cl::make_kernel<cl::Buffer &, cl::Image3D &, cl_float3> finalizeKernel(program, "finalize");
+void Phantom::finalize(OpenCLStuff & stuff, cl_uint nPaths){
+	cl::make_kernel<cl::Buffer &, cl::Buffer &, cl::Image3D &, cl_float3, cl_uint> finalizeKernel(program, "finalize");
 	cl::NDRange globalRange(size.s[0], size.s[1], size.s[2]);
 	cl::EnqueueArgs arg(stuff.queue, globalRange);
-	finalizeKernel(arg, doseBuff, voxelAttributes, voxSize);
+	finalizeKernel(arg, doseBuff, errorBuff, voxelAttributes, voxSize, nPaths);
 }
 
 void Phantom::output(OpenCLStuff & stuff, std::string & outDir){
 	int nVoxels = size.s[0] * size.s[1] * size.s[2];
-	cl_float8 * dose = new cl_float8[nVoxels];
+	cl_float8 * dose = new cl_float8[nVoxels]();
+	cl_float8 * error = new cl_float8[nVoxels]();
 	stuff.queue.finish();
 	stuff.queue.enqueueReadBuffer(doseBuff, CL_TRUE, 0, sizeof(cl_float8) * nVoxels, dose);
+	stuff.queue.enqueueReadBuffer(errorBuff, CL_TRUE, 0, sizeof(cl_float8) * nVoxels, error);
 
 	totalDose = new cl_float[nVoxels]();
 	primaryFluence = new cl_float[nVoxels]();
 	secondaryFluence = new cl_float[nVoxels]();
-	primaryLET = new cl_float[nVoxels]();
+	LET = new cl_float[nVoxels]();
 	secondaryLET = new cl_float[nVoxels]();
 	heavyDose = new cl_float[nVoxels]();
 	primaryDose = new cl_float[nVoxels]();
 	secondaryDose = new cl_float[nVoxels]();
 
+	doseErr = new cl_float[nVoxels]();
+	primaryFluenceErr = new cl_float[nVoxels]();
+	secondaryFluenceErr = new cl_float[nVoxels]();
+	LETErr = new cl_float[nVoxels]();
+	secondaryLETErr = new cl_float[nVoxels]();
+	heavyDoseErr = new cl_float[nVoxels]();
+	primaryDoseErr = new cl_float[nVoxels]();
+	secondaryDoseErr = new cl_float[nVoxels]();
 
-	std::string fileTotal = outDir+"totalDose.dat";
+
 	std::string fileTotalBin = outDir+"totalDose.bin";
-	std::string filePF = outDir + "primaryFluence.dat";
 	std::string filePFBin = outDir + "primaryFluence.bin";
-	std::string fileSF = outDir + "secondaryFluence.dat";
 	std::string fileSFBin = outDir + "secondaryFluence.bin";
-	std::string filePLET = outDir + "primaryLET.dat";
-	std::string filePLETBin = outDir + "primaryLET.bin";
-	std::string fileSLET = outDir + "secondaryLET.dat";
+	std::string fileLETBin = outDir + "LET.bin";
 	std::string fileSLETBin = outDir + "secondaryLET.bin";
-	std::string fileHeavy = outDir + "heavyDose.dat";
 	std::string fileHeavyBin = outDir + "heavyDose.bin";
-	std::string filePD = outDir + "primaryDose.dat";
 	std::string filePDBin = outDir + "primaryDose.bin";
-	std::string fileSD = outDir + "secondaryDose.dat";
 	std::string fileSDBin = outDir + "secondaryDose.bin";
 
-	std::ofstream ofsTotal(fileTotal, std::ios::out | std::ios::trunc);
-	std::ofstream ofsPF(filePF, std::ios::out | std::ios::trunc);
-	std::ofstream ofsSF(fileSF, std::ios::out | std::ios::trunc);
-	std::ofstream ofsPLET(filePLET, std::ios::out | std::ios::trunc);
-	std::ofstream ofsSLET(fileSLET, std::ios::out | std::ios::trunc);
-	std::ofstream ofsHeavy(fileHeavy, std::ios::out | std::ios::trunc);
-	std::ofstream ofsPD(filePD, std::ios::out | std::ios::trunc);
-	std::ofstream ofsSD(fileSD, std::ios::out | std::ios::trunc);
+	std::string fileDoseErr = outDir + "doseErr.bin";
+	std::string filePFErr = outDir + "primaryFluenceErr.bin";
+	std::string fileSFErr = outDir + "secondaryFluenceErr.bin";
+	std::string fileLETErr = outDir + "LETErr.bin";
+	std::string fileSLETErr = outDir + "secondaryLETErr.bin";
+	std::string fileHeavyErr = outDir + "heavyDoseErr.bin";
+	std::string filePDErr = outDir + "primaryDoseErr.bin";
+	std::string fileSDErr = outDir + "secondaryDoseErr.bin";
 
 	for (int i = 0; i < nVoxels; i++){
 		totalDose[i] = dose[i].s[0];
 		primaryFluence[i] = dose[i].s[1];
 		secondaryFluence[i] = dose[i].s[2];
-		primaryLET[i] = dose[i].s[3];
+		LET[i] = dose[i].s[3];
 		secondaryLET[i] = dose[i].s[4];
 		heavyDose[i] = dose[i].s[7];
 		primaryDose[i] = dose[i].s[5];
 		secondaryDose[i] = dose[i].s[6];
 
-/*		ofsTotal << totalDose[i] << '\t';
-		ofsPF << primaryFluence[i] << '\t';
-		ofsSF << secondaryFluence[i] << '\t';
-		ofsPLET << primaryLET[i] << '\t';
-		ofsSLET << secondaryLET[i] << '\t';
-		ofsHeavy << heavyDose[i] << '\t';
-		ofsPD << primaryDose[i] << '\t';
-		ofsSD << secondaryDose[i] << '\t';
-		
-		if ((i + 1) % size.s[0] == 0){
-			ofsTotal << '\n';
-			ofsPF << '\n';
-			ofsSF << '\n';
-			ofsPLET << '\n';
-			ofsSLET << '\n';
-			ofsHeavy << '\n';
-			ofsPD << '\n';
-			ofsSD << '\n';
-		}
-
-		if ((i + 1) % (size.s[0] * size.s[1]) == 0){
-			ofsTotal << '\n';
-			ofsPF << '\n';
-			ofsSF << '\n';
-			ofsPLET << '\n';
-			ofsSLET << '\n';
-			ofsHeavy << '\n';
-			ofsPD << '\n';
-			ofsSD << '\n';
-		}*/
+		doseErr[i] = error[i].s[0];
+		primaryFluenceErr[i] = error[i].s[1];
+		secondaryFluenceErr[i] = error[i].s[2];
+		LETErr[i] = error[i].s[3];
+		secondaryLETErr[i] = error[i].s[4];
+		heavyDoseErr[i] = error[i].s[7];
+		primaryDoseErr[i] = error[i].s[5];
+		secondaryDoseErr[i] = error[i].s[6];
 	}
-	ofsTotal.close();
-	ofsPF.close();
-	ofsSF.close();
-	ofsPLET.close();
-	ofsSLET.close();
-	ofsHeavy.close();
-	ofsPD.close();
-	ofsSD.close();
 
-	ofsTotal.open(fileTotalBin, std::fstream::out | std::fstream::trunc | std::fstream::binary);
+
+	std::ofstream ofsTotal(fileTotalBin, std::fstream::out | std::fstream::trunc | std::fstream::binary);
 	ofsTotal.write((const char *)(totalDose), nVoxels * sizeof(cl_float) / sizeof(char));
 	ofsTotal.close();
 
-	ofsPF.open(filePFBin, std::fstream::out | std::fstream::trunc | std::fstream::binary);
+	std::ofstream ofsPF(filePFBin, std::fstream::out | std::fstream::trunc | std::fstream::binary);
 	ofsPF.write((const char *)(primaryFluence), nVoxels * sizeof(cl_float) / sizeof(char));
 	ofsPF.close();
 
-	ofsSF.open(fileSFBin, std::fstream::out | std::fstream::trunc | std::fstream::binary);
+	std::ofstream ofsSF(fileSFBin, std::fstream::out | std::fstream::trunc | std::fstream::binary);
 	ofsSF.write((const char *)(secondaryFluence), nVoxels * sizeof(cl_float) / sizeof(char));
 	ofsSF.close();
 
-	ofsPLET.open(filePLETBin, std::fstream::out | std::fstream::trunc | std::fstream::binary);
-	ofsPLET.write((const char *)(primaryLET), nVoxels * sizeof(cl_float) / sizeof(char));
-	ofsPLET.close();
+	std::ofstream ofsLET(fileLETBin, std::fstream::out | std::fstream::trunc | std::fstream::binary);
+	ofsLET.write((const char *)(LET), nVoxels * sizeof(cl_float) / sizeof(char));
+	ofsLET.close();
 
-	ofsSLET.open(fileSLETBin, std::fstream::out | std::fstream::trunc | std::fstream::binary);
-	ofsSLET.write((const char *)(secondaryLET), nVoxels * sizeof(cl_float) / sizeof(char));
-	ofsSLET.close();
+//	std::ofstream ofsSLET(fileSLETBin, std::fstream::out | std::fstream::trunc | std::fstream::binary);
+//	ofsSLET.write((const char *)(secondaryLET), nVoxels * sizeof(cl_float) / sizeof(char));
+//	ofsSLET.close();
 
-	ofsHeavy.open(fileHeavyBin, std::fstream::out | std::fstream::trunc | std::fstream::binary);
+	std::ofstream ofsHeavy(fileHeavyBin, std::fstream::out | std::fstream::trunc | std::fstream::binary);
 	ofsHeavy.write((const char *)(heavyDose), nVoxels * sizeof(cl_float) / sizeof(char));
 	ofsHeavy.close();
 
-	ofsPD.open(filePDBin, std::fstream::out | std::fstream::trunc | std::fstream::binary);
+	std::ofstream ofsPD(filePDBin, std::fstream::out | std::fstream::trunc | std::fstream::binary);
 	ofsPD.write((const char *)(primaryDose), nVoxels * sizeof(cl_float) / sizeof(char));
 	ofsPD.close();
 
-	ofsSD.open(fileSDBin, std::fstream::out | std::fstream::trunc | std::fstream::binary);
+	std::ofstream ofsSD(fileSDBin, std::fstream::out | std::fstream::trunc | std::fstream::binary);
 	ofsSD.write((const char *)(secondaryDose), nVoxels * sizeof(cl_float) / sizeof(char));
 	ofsSD.close();
+
+
+
+
+	std::ofstream ofsTotalErr(fileDoseErr, std::fstream::out | std::fstream::trunc | std::fstream::binary);
+	ofsTotalErr.write((const char *)(doseErr), nVoxels * sizeof(cl_float) / sizeof(char));
+	ofsTotalErr.close();
+
+	std::ofstream ofsPFErr(filePFErr, std::fstream::out | std::fstream::trunc | std::fstream::binary);
+	ofsPFErr.write((const char *)(primaryFluenceErr), nVoxels * sizeof(cl_float) / sizeof(char));
+	ofsPFErr.close();
+
+	std::ofstream ofsSFErr(fileSFErr, std::fstream::out | std::fstream::trunc | std::fstream::binary);
+	ofsSFErr.write((const char *)(secondaryFluenceErr), nVoxels * sizeof(cl_float) / sizeof(char));
+	ofsSFErr.close();
+
+	std::ofstream ofsLETErr(fileLETErr, std::fstream::out | std::fstream::trunc | std::fstream::binary);
+	ofsLETErr.write((const char *)(LETErr), nVoxels * sizeof(cl_float) / sizeof(char));
+	ofsLETErr.close();
+
+	//	std::ofstream ofsSLET(fileSLETBin, std::fstream::out | std::fstream::trunc | std::fstream::binary);
+	//	ofsSLET.write((const char *)(secondaryLET), nVoxels * sizeof(cl_float) / sizeof(char));
+	//	ofsSLET.close();
+
+	std::ofstream ofsHeavyErr(fileHeavyErr, std::fstream::out | std::fstream::trunc | std::fstream::binary);
+	ofsHeavyErr.write((const char *)(heavyDoseErr), nVoxels * sizeof(cl_float) / sizeof(char));
+	ofsHeavyErr.close();
+
+	std::ofstream ofsPDErr(filePDErr, std::fstream::out | std::fstream::trunc | std::fstream::binary);
+	ofsPDErr.write((const char *)(primaryDoseErr), nVoxels * sizeof(cl_float) / sizeof(char));
+	ofsPDErr.close();
+
+	std::ofstream ofsSDErr(fileSDErr, std::fstream::out | std::fstream::trunc | std::fstream::binary);
+	ofsSDErr.write((const char *)(secondaryDoseErr), nVoxels * sizeof(cl_float) / sizeof(char));
+	ofsSDErr.close();
 }
 
 void Phantom::tempStore(OpenCLStuff & stuff){
-	cl::make_kernel<cl::Buffer &, cl::Buffer &> tempStoreKernel(program, "tempStore");
+	cl::make_kernel<cl::Buffer &, cl::Buffer &, cl::Buffer &, cl::Buffer &> tempStoreKernel(program, "tempStore");
 	cl::NDRange globalRange(size.s[0], size.s[1], size.s[2]);
 	cl::EnqueueArgs arg(stuff.queue, globalRange);
-	tempStoreKernel(arg, doseCounter, doseBuff);
+	tempStoreKernel(arg, doseCounter, doseBuff, errorCounter, errorBuff);
 }

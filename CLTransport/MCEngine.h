@@ -30,5 +30,7 @@ private:
 	DensCorrection * densCorrection;
 	std::string outDir;
 	OpenCLStuff  stuff;
+
+	cl_uint nPaths;
 };
 

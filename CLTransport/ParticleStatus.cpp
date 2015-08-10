@@ -13,7 +13,8 @@
 ParticleStatus::ParticleStatus(){
 }
 
-ParticleStatus::ParticleStatus(OpenCLStuff & stuff, cl_float T, cl_float2 width_, cl_float3 sourceCenter_, cl_ulong nParticles_):energy(T), width(width_), sourceCenter(sourceCenter_), nParticles(nParticles_) {
+ParticleStatus::ParticleStatus(OpenCLStuff & stuff, cl_float T, cl_float2 width_, cl_float3 sourceCenter_, cl_ulong nParticles_)
+	:energy(T), width(width_), sourceCenter(sourceCenter_), nParticles(nParticles_) {
 	buildProgram(stuff);
 }
 
@@ -80,7 +81,7 @@ void ParticleStatus::propagate(OpenCLStuff & stuff, Phantom * phantom, MacroCros
 	int err;
 	cl::EnqueueArgs arg(stuff.queue, globalRange);
 	
-	cl::make_kernel < cl::Buffer &, cl::Buffer &, cl::Image3D &, cl_float3, cl::Image2D &, cl::Image2D &, cl::Image2D &, cl::Buffer &, cl::Buffer &, cl_int, cl::Buffer &> propagateKernel(program, "propagate", &err);
+	cl::make_kernel < cl::Buffer &, cl::Buffer &, cl::Buffer &, cl::Image3D &, cl_float3, cl::Image2D &, cl::Image2D &, cl::Image2D &, cl::Buffer &, cl::Buffer &, cl_int, cl::Buffer &> propagateKernel(program, "propagate", &err);
 
 	time_t timer;
 	srand((unsigned int)time(NULL));
@@ -90,7 +91,7 @@ void ParticleStatus::propagate(OpenCLStuff & stuff, Phantom * phantom, MacroCros
 	stuff.queue.enqueueWriteBuffer(mutex, CL_TRUE, 0, sizeof(cl_int), &initialMutext);
 
 	stuff.queue.finish();
-	propagateKernel(arg, particleStatus.back(), phantom->doseCounterGPU(), phantom->voxelGPU(), phantom->voxelSize(), macroSigma->gpu(),
+	propagateKernel(arg, particleStatus.back(), phantom->doseCounterGPU(), phantom->errorCounterGPU(), phantom->voxelGPU(), phantom->voxelSize(), macroSigma->gpu(),
 		resStpPowWater->gpu(), massStpPowRatio->gpu(), secondary->particleStatus[0], secondary->nSecondBuffer(), randSeed, mutex);
 
 }
