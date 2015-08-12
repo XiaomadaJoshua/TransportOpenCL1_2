@@ -48,21 +48,21 @@ bool ifInsidePhantom(float3 pos, float3 voxSize, int3 phantomSize){
 
 float step2VoxBoundary(float3 pos, float3 dir, float3 voxSize, int * cb) {
 	float stepX, stepY, stepZ;
-	if(dir.x < ZERO && -1.0f*dir.x > -1.0f*ZERO)
+	if(fabs(dir.x) < ZERO)
 		stepX = INF;
 	else if(dir.x > 0)
 		stepX = (ceil(pos.x/voxSize.x)*voxSize.x - pos.x)/dir.x;
 	else
 		stepX = (floor(pos.x/voxSize.x)*voxSize.x - pos.x)/dir.x;
 
-	if(dir.y < ZERO && -1.0f*dir.y > -1.0f*ZERO)
+	if(fabs(dir.y) < ZERO)
 		stepY = INF;
 	else if(dir.y > 0)
 		stepY = (ceil(pos.y/voxSize.y)*voxSize.y - pos.y)/dir.y;
 	else
 		stepY = (floor(pos.y/voxSize.y)*voxSize.y - pos.y)/dir.y;
 
-	if(dir.z < ZERO && -1.0f*dir.z > -1.0f*ZERO)
+	if(fabs(dir.z) < ZERO)
 		stepZ = INF;
 	else if(dir.z > 0)
 		stepZ = (ceil(pos.z/voxSize.z)*voxSize.z - pos.z)/dir.z;
@@ -191,17 +191,17 @@ float3 transform(float3 dir, float theta, float phi){
 float3 getMovement(float3 value, int crossBound){
 	switch(crossBound){
 	case(1):
-		if(value.x < ZERO && -1.0f*value.x > -1.0f*ZERO)
+		if(fabs(value.x) < ZERO)
 			value.x = value.x >= 0 ? ZERO : -ZERO;
 		break;
 
 	case(2):
-		if(value.y < ZERO && -1.0f*value.y > -1.0f*ZERO)
+		if(fabs(value.y) < ZERO)
 			value.y = value.y >= 0 ? ZERO : -ZERO;
 		break;
 
 	case(3):
-		if(value.z < ZERO && -1.0f*value.z > -1.0f*ZERO)
+		if(fabs(value.z) < ZERO)
 			value.z = value.z >= 0 ? ZERO : -ZERO;
 		break;
 
