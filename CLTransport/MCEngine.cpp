@@ -19,11 +19,13 @@
 MCEngine::MCEngine(const char * file){
 	// TODO Auto-generated constructor stub
 	// initialize from file
+	std::cout << "initialize from file: " << file << std::endl;
 	ifstream ifs(file, fstream::in);
 	char buff[300];
 	string directory;
 	
 	// initialize physics data
+	std::cout << "initialize physics data" << std::endl;
 	ifs.getline(buff, 300);
 	getline(ifs, directory);
 	macroSigma = new MacroCrossSection();
@@ -46,16 +48,17 @@ MCEngine::MCEngine(const char * file){
 
 
 	// initialize protons
+	std::cout << "initialize protons" << std::endl;
 	ifs.getline(buff, 300);
 	float energy;
 	cl_float2 bWidth;
-	unsigned long nPaths;
 	cl_float3 bSource;
 	ifs >> bWidth.s[0] >> ws >> bWidth.s[1] >> ws >> energy >> ws >> nPaths >> ws;
 	ifs >> bSource.s[0] >> bSource.s[1] >> bSource.s[2] >> ws;
 	primary = new Proton(stuff, nPaths, energy, bWidth, bSource);
 
 	//initialize phantom
+	std::cout << "initialize phantom" << std::endl;
 	ifs.getline(buff, 300);
 	cl_float3 voxSize, phantomIso;
 	ifs >> voxSize.s[0] >> voxSize.s[1] >> voxSize.s[2] >> ws;
@@ -89,7 +92,7 @@ void MCEngine::simulate(float minEnergy){
 	}
 	secondary->clear(stuff, phantom, macroSigma, rspw, mspr);
 	phantom->tempStore(stuff);
-	phantom->finalize(stuff);
+	phantom->finalize(stuff, nPaths);
 	phantom->output(stuff, outDir);
 
 	std::cout << "number of batches: " << i << std::endl;

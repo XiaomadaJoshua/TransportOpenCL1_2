@@ -33,7 +33,9 @@ Phantom::Phantom(OpenCLStuff & stuff, cl_float3 voxSize_, cl_int3 size_, const D
 
 		fread(CT, sizeof(short)*nVoxels, 1, fp);
 		fclose(fp);
-
+		
+//		float * densityCheck = new float[nVoxels];
+		
 		//initialize from CT file
 		for (int i = 0; i < nVoxels; i++){
 			attributes[i].s[0] = (float)CT[i]; // ct value
@@ -44,7 +46,15 @@ Phantom::Phantom(OpenCLStuff & stuff, cl_float3 voxSize_, cl_int3 size_, const D
 			ind = ind > densityCF.size() - 1 ? densityCF.size() - 1 : ind;
 			attributes[i].s[2] *= densityCF[ind];
 			attributes[i].s[3] = ct2eden(attributes[i].s[1], attributes[i].s[2]); // edensity
+			
+//			densityCheck[i] = attributes[i].s[2];
 		}
+		
+//		std::ofstream ofsDensity("Output/density", std::ios::out | std::ios::trunc | std::fstream::binary);
+//		ofsDensity.write((const char *)(densityCheck), nVoxels * sizeof(float) / sizeof(char));
+//		ofsDensity.close();
+//		delete[] densityCheck;
+		
 	}
 	else{
 		//initialize a water phantom
@@ -67,9 +77,14 @@ Phantom::Phantom(OpenCLStuff & stuff, cl_float3 voxSize_, cl_int3 size_, const D
 	std::string source;
 	OpenCLStuff::convertToString("Phantom.cl", source);
 	program = cl::Program(stuff.context, source);
-	program.build("-cl-single-precision-constant");
+	err = program.build("-cl-single-precision-constant");
 	std::string info;
 	info = program.getBuildInfo<CL_PROGRAM_BUILD_LOG>(stuff.device);
+		if (err != 0){
+		std::cout << "build result: " << err << std::endl;
+		std::cout << info << std::endl;
+	}
+	
 	cl::make_kernel<cl::Buffer &> initDoseCounterKernel(program, "initializeDoseCounter", &err);
 	
 	// 0 in float8 is total dose, 1 in float8 is primary fluence, 2 in float8 is secondary fluence, 3 in float8 is primary LET, 4 in float8 is secondary LET, 5 in float8 is primary dose,
@@ -185,11 +200,11 @@ cl_float Phantom::ct2eden(cl_float material, cl_float density) const{
 	return edensity;
 }
 
-void Phantom::finalize(OpenCLStuff & stuff){
-	cl::make_kernel<cl::Buffer &, cl::Image3D &, cl_float3> finalizeKernel(program, "finalize");
+void Phantom::finalize(OpenCLStuff & stuff, cl_uint nPaths){
+	cl::make_kernel<cl::Buffer &, cl::Image3D &, cl_float3, cl_uint> finalizeKernel(program, "finalize");
 	cl::NDRange globalRange(size.s[0], size.s[1], size.s[2]);
 	cl::EnqueueArgs arg(stuff.queue, globalRange);
-//	finalizeKernel(arg, doseBuff, voxelAttributes, voxSize);
+	finalizeKernel(arg, doseBuff, voxelAttributes, voxSize, nPaths);
 }
 
 void Phantom::output(OpenCLStuff & stuff, std::string & outDir){

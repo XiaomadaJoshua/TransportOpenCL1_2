@@ -10,7 +10,7 @@ OpenCLStuff::OpenCLStuff()
 {
 	cl::Platform::get(&platform);
 	std::vector<cl::Device> devs;
-	platform.getDevices(CL_DEVICE_TYPE_CPU, &devs);
+	platform.getDevices(CL_DEVICE_TYPE_GPU, &devs);
 	device = devs[0];
 	context = cl::Context(device);
 	queue = cl::CommandQueue(context, device);

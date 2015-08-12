@@ -10,6 +10,16 @@
 #include "MCEngine.h"
 #include <string>
 
+#include "DensCorrection.cpp"
+#include "MacroCrossSection.cpp"
+#include "MCEngine.cpp"
+#include "MSPR.cpp"
+#include "OpenCLStuff.cpp"
+#include "ParticleStatus.cpp"
+#include "Phantom.cpp"
+#include "Proton.cpp"
+#include "RSPW.cpp"
+#include "Secondary.cpp"
 
 
 

@@ -12,7 +12,7 @@ public:
 	cl::Image3D & voxelGPU(){ return voxelAttributes; }
 	cl::Buffer & doseCounterGPU(){ return doseCounter; }
 	cl_float3 voxelSize() const { return voxSize; }
-	void finalize(OpenCLStuff & stuff);
+	void finalize(OpenCLStuff & stuff, cl_uint nPaths);
 	void output(OpenCLStuff & stuff, std::string & outDir);
 	void tempStore(OpenCLStuff & stuff);
 

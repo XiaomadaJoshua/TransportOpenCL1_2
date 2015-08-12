@@ -9,7 +9,7 @@ class RSPW;
 class MSPR;
 class Secondary;
 
-struct __declspec(align(16)) PS{
+struct PS{
 	cl_float3 pos, dir;
 	cl_float energy, maxSigma, mass, charge;
 	cl_int ifPrimary;
