@@ -10,7 +10,7 @@ input/densityCorrection.dat
 50  200
 300.00000000
 1000000000
-20.0000	0.00000000	0.00000000
+-20.0000	0.00000000	0.00000000
 // phantom parameters: vox size, iso center, width, hight, depth
 0.137 0.137	0.5
 0.00000000 0.00000000 0.00000000

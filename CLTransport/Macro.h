@@ -24,8 +24,6 @@
 #define POITHRESHOLD 20.0 // energy threshold of proton oxygen inelastic interaction
 #define NDOSECOUNTERS 2 // number of dosecounters
 
-#define __SCOREDOSE2WATER__ 1
-//	if __SCOREDOSE2WATER__ is turned on, 1--on, 0--off
 
 #define MIN(a,b) (a > b ? b : a)
 #define MIN3(a,b,c) (a > b ? b : a) > c ? c : (a > b ? b : a)
