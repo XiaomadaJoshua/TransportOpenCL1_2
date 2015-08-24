@@ -9,13 +9,21 @@
 #include "ParticleStatus.h"
 #include "MCEngine.h"
 #include <string>
-
-
-
-
+#include <iostream>
+/*
+#include "DensCorrection.cpp"
+#include "MacroCrossSection.cpp"
+#include "MCEngine.cpp"
+#include "MSPR.cpp"
+#include "OpenCLStuff.cpp"
+#include "ParticleStatus.cpp"
+#include "Phantom.cpp"
+#include "Proton.cpp"
+#include "RSPW.cpp"
+#include "Secondary.cpp"
+*/
 int main(){
-//	cl_float8 * temp = new cl_float8[1000000]();
-//	std::cin >> temp;
+	int temp;
 	MCEngine mc("proton_config");
 	mc.simulate(MINPROTONENERGY);
 //	std::cin >> temp;

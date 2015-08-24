@@ -19,8 +19,8 @@ __kernel void finalize(__global float8 * doseBuff, __global float8 * errorBuff, 
 	float8 dose = doseBuff[absId];
 	float8 error = errorBuff[absId];
 
-	// 0 in float8 is total dose, 1 in float8 is primary fluence, 2 in float8 is secondary fluence, 3 in float8 is primary LET, 4 in float8 is secondary LET, 5 in float8 is primary dose,
-	// 6 in float8 is secondary dose, 7 in float8 is heavy dose.
+	// 0 in float8 is total dose, 1 in float8 is primary fluence, 2 in float8 is secondary fluence, 3 in float8 is primary LET, 4 in float8 is secondary LET, 
+	//5 in float8 is primary dose, 6 in float8 is secondary dose, 7 in float8 is heavy dose.
 	dose.s0 = dose.s0/mass;
 	dose.s1 = dose.s1/volume;
 	dose.s2 = dose.s2/volume;
@@ -56,7 +56,8 @@ __kernel void finalize(__global float8 * doseBuff, __global float8 * errorBuff, 
 	doseBuff[absId] = dose;
 	errorBuff[absId] = error;
 
-//	printf("mass = %f\n", mass);
+//	if(doseBuff[absId].s0 > 0.0f)
+//		printf("buff, %v8f\n", doseBuff[absId]);
 }
 
 __kernel void tempStore(__global float8 * doseCounter, __global float8 * doseBuff, 
@@ -65,11 +66,17 @@ __kernel void tempStore(__global float8 * doseCounter, __global float8 * doseBuf
 	size_t idy = get_global_id(1);
 	size_t idz = get_global_id(2);
 	size_t absId = idx + idy*get_global_size(0) + idz*get_global_size(0)*get_global_size(1);
-	int nVoxels = get_global_size(0)*get_global_size(1)*get_global_size(2);
+	int nVoxels = get_global_size(0)*get_global_size(1)*get_global_size(2); 
+
+//	printf("idx = %d, idy = %d, idz = %d, absId = %d, nVoxels = %d\n", idx, idy, idz, absId, nVoxels);
+	
 	for(int i  = 0; i < NDOSECOUNTERS; i++){
 		doseBuff[absId] += doseCounter[absId + i*nVoxels];
 		errorBuff[absId] += errorCounter[absId + i*nVoxels];
 		doseCounter[absId + i*nVoxels] = 0;
 		errorCounter[absId + i*nVoxels] = 0;
 	}
+//	if(doseBuff[absId].s0 > 0.0f)
+//		printf("buff, %v8f\n", doseBuff[absId]);
+
 }

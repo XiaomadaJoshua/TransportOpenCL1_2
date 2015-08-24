@@ -1,6 +1,9 @@
 #include "randomKernel.h"
 #include "Macro.h"
 
+#define __SCOREDOSE2WATER__ 0
+//	if __SCOREDOSE2WATER__ is turned on, 1--on, 0--off
+
 typedef struct __attribute__ ((aligned)) ParticleStatus{
 	float3 pos, dir;
 	float energy, maxSigma, mass, charge;
@@ -15,17 +18,20 @@ __kernel void initParticles(__global PS * particle, float T, float2 width, float
 //		int size = sizeof(PS);
 //		printf("size of PS: %d\n", size);
 //	}
-	particle[gid].pos.z = -distance(sourceCenter, (float3)(0.0f, 0.0f, 0.0f));
+
+	particle[gid].pos.z = sourceCenter.z;
 	int iseed[2];
 	iseed[0] = randSeed;
 	iseed[1] = gid;
 	MTrng(iseed);
-	particle[gid].pos.x = (MTrng(iseed) - 0.5f) * width.x;
-	particle[gid].pos.y = (MTrng(iseed) - 0.5f) * width.y;
-
-	particle[gid].dir.x = 0.0f;
-	particle[gid].dir.y = 0.0f;
-	particle[gid].dir.z = 1.0f;
+	particle[gid].pos.x = (MTrng(iseed) - 0.5f) * width.s0;
+	particle[gid].pos.y = (MTrng(iseed) - 0.5f) * width.s1;
+	
+	particle[gid].dir = normalize((float3)(0.0f, 0.0f, 0.0f) - sourceCenter);
+	
+//	particle[gid].dir.x = -1.0f;
+//	particle[gid].dir.y = 0.0f;
+//	particle[gid].dir.z = 0.0f;
 
 	particle[gid].energy = T;
 	particle[gid].maxSigma = 0.0f;
@@ -35,62 +41,73 @@ __kernel void initParticles(__global PS * particle, float T, float2 width, float
 }
 
 
-bool ifInsidePhantom(float3 pos, float3 voxSize, int3 phantomSize){
-	int3 ifInside = isgreaterequal(pos, -convert_float3(phantomSize)*voxSize/2.0f) * isless(pos, convert_float3(phantomSize)*voxSize/2.0f);
+bool ifInsidePhantom(float3 pos, float3 voxSize, int3 phantomSize, int3 * voxIndex, int * absIndex){
+	int3 ifInside = isgreaterequal(pos, -convert_float3(phantomSize)*voxSize/2.0f) * islessequal(pos, convert_float3(phantomSize)*voxSize/2.0f);
+//	printf("voxSize = %f %f %f, phantomSize = %d %d %d, pos = %f %f %f, ifInside = %d %d %d\n",
+//			voxSize.x, voxSize.y, voxSize.z, phantomSize.x, phantomSize.y, phantomSize.z, pos.x, pos.y, pos.z, ifInside.x, ifInside.y, ifInside.z);
 	if(ifInside.x == 0 || ifInside.y == 0 || ifInside.z == 0)
 		return false;
-	float3 voxIndex = pos / voxSize + convert_float3(phantomSize) / 2.0f;
-	int absIndex = convert_int_rtn(voxIndex.x) + convert_int_rtn(voxIndex.y)*phantomSize.x + convert_int_rtn(voxIndex.z)*phantomSize.x*phantomSize.y;
-	if(absIndex >= phantomSize.x*phantomSize.y*phantomSize.z)
+	*voxIndex = convert_int3_rtn(pos / voxSize + convert_float3(phantomSize) / 2.0f);
+	*absIndex = (*voxIndex).x + (*voxIndex).y*phantomSize.x + (*voxIndex).z*phantomSize.x*phantomSize.y;
+	if(*absIndex >= phantomSize.x*phantomSize.y*phantomSize.z)
 		return false;
 	return true;
 }
 
-float step2VoxBoundary(float3 pos, float3 dir, float3 voxSize, int * cb) {
+
+float step2VoxBoundary(float3 pos, float3 dir, float3 voxSize, int * cb, int3 phantomSize, int3 voxIndex) {
+//	pos = (float3)(0.0, 0.0, 10.0);
+//	dir = (float3)(0.01, -0.01, 0.999);
 	float stepX, stepY, stepZ;
-	if(fabs(dir.x) < ZERO)
+
+	float3 phantomBoundary = convert_float3(phantomSize) * voxSize;
+
+//	printf("floor(0.0) = %f, ceil(0.0) = %f\n", floor(0.0f), ceil(0.0f));
+	if(fabs(dir.x) < EPSILON)
 		stepX = INF;
 	else if(dir.x > 0)
-		stepX = (ceil(pos.x/voxSize.x)*voxSize.x - pos.x)/dir.x;
+		stepX = ((voxIndex.x + 1)*voxSize.x - phantomBoundary.x * 0.5f - pos.x)/dir.x;
 	else
-		stepX = (floor(pos.x/voxSize.x)*voxSize.x - pos.x)/dir.x;
+		stepX = (voxIndex.x * voxSize.x - phantomBoundary.x * 0.5f  - pos.x)/dir.x;
 
-	if(fabs(dir.y) < ZERO)
+	if(fabs(dir.y) < EPSILON)
 		stepY = INF;
 	else if(dir.y > 0)
-		stepY = (ceil(pos.y/voxSize.y)*voxSize.y - pos.y)/dir.y;
+		stepY = ((voxIndex.y + 1)*voxSize.y - phantomBoundary.y * 0.5f - pos.y)/dir.y;
 	else
-		stepY = (floor(pos.y/voxSize.y)*voxSize.y - pos.y)/dir.y;
+		stepY = (voxIndex.y * voxSize.y - phantomBoundary.y * 0.5f - pos.y)/dir.y;
 
-	if(fabs(dir.z) < ZERO)
+	if(fabs(dir.z) < EPSILON)
 		stepZ = INF;
 	else if(dir.z > 0)
-		stepZ = (ceil(pos.z/voxSize.z)*voxSize.z - pos.z)/dir.z;
+		stepZ = ((voxIndex.z + 1)*voxSize.z - phantomBoundary.z * 0.5f - pos.z)/dir.z;
 	else
-		stepZ = (floor(pos.z/voxSize.z)*voxSize.z - pos.z)/dir.z;
+		stepZ = (voxIndex.z * voxSize.z - phantomBoundary.z * 0.5f - pos.z)/dir.z;
 
-	float step;
+	float minStep;
 	if(stepX < stepY){
-		step = stepX;
-		if(step < stepZ)
+		minStep = stepX;
+		if(minStep < stepZ)
 			*cb = 1;
 		else{
-			step = stepZ;
+			minStep = stepZ;
 			*cb = 3;
 		}
 	}
 	else{
-		step = stepY;
-		if(step < stepZ)
+		minStep = stepY;
+		if(minStep < stepZ)
 			*cb = 2;
 		else{
-			step = stepZ;
+			minStep = stepZ;
 			*cb = 3;
 		}
 	}
-	
-
-	return step < ZERO ? ZERO : step;
+//	printf("pos = %v3f, dir = %v3f, voxSize = %v3f, stepX = %f, stepY = %f, stepZ = %f, cb = %d\n",
+//			pos, dir, voxSize, stepX, stepY, stepZ, *cb);
+//	if(minStep < 0)
+//		printf("vox = %v3d, dir = %v3f, pos = %v3f, stepX = %f, stepY = %f, stepZ = %f, minStep = %f\n", voxIndex, dir, pos, stepX, stepY, stepZ, minStep);
+	return fabs(minStep) + 5e-6 ;
 }
 
 float energyInOneStep(float4 vox, PS * particle, read_only image2d_t RSPW, read_only image2d_t MSPR, float stepLength) {
@@ -188,33 +205,38 @@ float3 transform(float3 dir, float theta, float phi){
 
 }
 
-float3 getMovement(float3 value, int crossBound){
+
+float3 getMovement(float3 value, int crossBound, float3 pos){
+	float3 zero = ZERO*fabs(pos);
+	zero = ZERO;
+//	printf("value = %v3f, zero = %v3f\n", value, zero);
 	switch(crossBound){
 	case(1):
-		if(fabs(value.x) < ZERO)
-			value.x = value.x >= 0 ? ZERO : -ZERO;
+		if(fabs(value.x) < zero.x)
+			value.x = value.x >= 0 ? zero.x : -zero.x;
 		break;
 
 	case(2):
-		if(fabs(value.y) < ZERO)
-			value.y = value.y >= 0 ? ZERO : -ZERO;
+		if(fabs(value.y) < zero.y)
+			value.y = value.y >= 0 ? zero.y : -zero.y;
 		break;
 
 	case(3):
-		if(fabs(value.z) < ZERO)
-			value.z = value.z >= 0 ? ZERO : -ZERO;
+		if(fabs(value.z) < zero.z)
+			value.z = value.z >= 0 ? zero.z : -zero.z;
 		break;
 
 	case(0):
 		break;
 	}
-
+//	printf("value = %v3f\n", value);
 	return value;
 }
 
 inline void update(PS * thisOne, float stepLength, float energyTransfer, float theta, float phi, int crossBound, float deflection){	
 	
-	float3 movement = getMovement(thisOne->dir*stepLength, crossBound);	
+	float3 movement = getMovement(thisOne->dir*stepLength, crossBound, thisOne->pos);	
+//	printf("dir = %v3f, pos = %v3f, movement = %v3f\n", thisOne->dir, thisOne->pos, movement);
 	thisOne->pos += movement;
 	thisOne->dir = transform(thisOne->dir, theta, phi);
 	thisOne->energy -= energyTransfer;
@@ -241,12 +263,22 @@ inline void atomicAdd(volatile global float * source, const float operand) {
 
 	// 0 in float8 is total dose, 1 in float8 is primary fluence, 2 in float8 is secondary fluence, 3 in float8 is LET, 4 in float8 is nothing, 5 in float8 is primary dose,
 	// 6 in float8 is secondary dose, 7 in float8 is heavy dose.
-void score(global float8 * doseCounter, global float8 * errorCounter, int absIndex, int nVoxels, float energyTransfer, float stepLength, int ifPrimary, int * iseed){
+
+void score(global float8 * doseCounter, global float8 * errorCounter, int absIndex, int nVoxels, float energyTransfer, float stepLength, int ifPrimary, int * iseed, 
+			read_only image2d_t MSPR, PS * thisOne, float material){
+
 	// choose a dose counter
 	int doseCounterId = convert_int_rtn(MTrng(iseed)*NDOSECOUNTERS);
 
 	volatile global float * counter = &doseCounter[absIndex + doseCounterId * nVoxels];
 	volatile global float * counter2 = &errorCounter[absIndex + doseCounterId * nVoxels];
+
+	#if defined(__SCOREDOSE2WATER__) && (__SCOREDOSE2WATER__ == 1)
+	sampler_t dataSampler = CLK_NORMALIZED_COORDS_FALSE | CLK_ADDRESS_CLAMP_TO_EDGE | CLK_FILTER_LINEAR;
+	energyTransfer = energyTransfer/read_imagef(MSPR, dataSampler, (float2)(thisOne->energy - 0.5f, material + 0.5f)).s0;
+//	printf("score dose to water\n");
+	#endif
+
 	atomicAdd(counter, energyTransfer);
 	atomicAdd(counter2, energyTransfer*energyTransfer);
 
@@ -286,7 +318,16 @@ void scoreFluence(global float8 * doseCounter, global float8 * errorCounter, int
 
 }
 
-void scoreHeavy(global float8 * doseCounter, global float8 * errorCounter, int absIndex, int nVoxels, float energyTransfer, int * iseed){
+void scoreHeavy(global float8 * doseCounter, global float8 * errorCounter, int absIndex, int nVoxels, float energyTransfer, int * iseed, 
+				read_only image2d_t MSPR, PS * thisOne, float material){
+	
+
+	#if defined(__SCOREDOSE2WATER__) && (__SCOREDOSE2WATER__ == 1)
+	sampler_t dataSampler = CLK_NORMALIZED_COORDS_FALSE | CLK_ADDRESS_CLAMP_TO_EDGE | CLK_FILTER_LINEAR;
+	energyTransfer = energyTransfer/read_imagef(MSPR, dataSampler, (float2)(thisOne->energy - 0.5f, material + 0.5f)).s0;
+//	printf("score dose to water\n");
+	#endif
+
 	// choose a dose counter
 	int doseCounterId = convert_int_rtn(MTrng(iseed)*NDOSECOUNTERS);
 	volatile global float * counter = &doseCounter[absIndex + doseCounterId * nVoxels];
@@ -299,7 +340,7 @@ void scoreHeavy(global float8 * doseCounter, global float8 * errorCounter, int a
 
 void store(PS * newOne, __global PS * secondary, volatile __global uint * nSecondary, global int * mutex2Secondary){
 	if(*nSecondary == 0){
-		printf("\n secondary particle overflow!!!\n");
+//		printf("\n secondary particle overflow!!!\n");
 		return;	
 	}
 	
@@ -312,8 +353,9 @@ void store(PS * newOne, __global PS * secondary, volatile __global uint * nSecon
 }
 
 
-void ionization(PS * thisOne, global float8 * doseCounter, global float8 * errorCounter, int absIndex, int nVoxels, int * iseed, float stepLength){
-	
+
+void ionization(PS * thisOne, global float8 * doseCounter, global float8 * errorCounter, int absIndex, int nVoxels, 
+				int * iseed, float stepLength, read_only image2d_t MSPR, float material){
 
 	float E = thisOne->energy + thisOne->mass;
 	float Te;
@@ -328,7 +370,7 @@ void ionization(PS * thisOne, global float8 * doseCounter, global float8 * error
 
 
 	update(thisOne, 0.0f, Te, 0.0f, 0.0f, 0, 0.0f);
-	score(doseCounter, errorCounter, absIndex, nVoxels, Te, stepLength, thisOne->ifPrimary, iseed);
+	score(doseCounter, errorCounter, absIndex, nVoxels, Te, stepLength, thisOne->ifPrimary, iseed, MSPR, thisOne, material);
 
 }
 
@@ -388,17 +430,21 @@ void PPElastic(PS * thisOne, __global PS * secondary, volatile __global uint * n
 	store(&newOne, secondary, nSecondary, mutex2Secondary);
 }
 
-void POElastic(PS * thisOne, global float8 * doseCounter, global float8 * errorCounter, int absIndex, int nVoxels, int * iseed){
+
+void POElastic(PS * thisOne, global float8 * doseCounter, global float8 * errorCounter, int absIndex, int nVoxels, int * iseed, read_only image2d_t MSPR, float material){
 	// sample energy transferred to oxygen
+	float energyTransfer;
+	
 	if(thisOne->energy < 7.2f){
-		scoreHeavy(doseCounter, errorCounter, absIndex, nVoxels, thisOne->energy, iseed);
+		energyTransfer = thisOne->energy;
+		scoreHeavy(doseCounter, errorCounter, absIndex, nVoxels, energyTransfer, iseed, MSPR, thisOne, material);
 		thisOne->energy = 0;
 		return;
 	}
 	float meanEnergy = 0.65f*exp(-0.0013f*thisOne->energy) - 0.71f*exp(-0.0177f*thisOne->energy);
 	
 //	meanEnergy = meanEnergy < 1.0f ? 1.0f : meanEnergy;
-	float energyTransfer;
+
 	do{
 		energyTransfer = MTExp(iseed, meanEnergy);
 	}while(energyTransfer > maxOxygenEnergy(thisOne));
@@ -420,11 +466,11 @@ void POElastic(PS * thisOne, global float8 * doseCounter, global float8 * errorC
 	phi = MTrng(iseed)*2.0f*PI;
 
 	update(thisOne, 0.0f, energyTransfer, theta, phi, 0, 0.0f);
-	scoreHeavy(doseCounter, errorCounter, absIndex, nVoxels, energyTransfer, iseed);
+	scoreHeavy(doseCounter, errorCounter, absIndex, nVoxels, energyTransfer, iseed, MSPR, thisOne, material);
 }
 
-void POInelastic(PS * thisOne, __global PS * secondary, volatile __global uint * nSecondary, global float8 * doseCounter, 
-				global float8 * errorCounter, int absIndex, int nVoxels, int * iseed, global int * mutex2Secondary){
+void POInelastic(PS * thisOne, __global PS * secondary, volatile __global uint * nSecondary, global float8 * doseCounter, global float8 * errorCounter,
+				 int absIndex, int nVoxels, int * iseed, global int * mutex2Secondary, read_only image2d_t MSPR, float material){
 	float rand = MTrng(iseed);
 
 	float bindEnergy = EBIND;
@@ -467,12 +513,13 @@ void POInelastic(PS * thisOne, __global PS * secondary, volatile __global uint *
 		bindEnergy *= 0.5f;
 		remainEnergy -= energy2SecondParticle;
 	}
-	scoreHeavy(doseCounter, errorCounter, absIndex, nVoxels, energyDeposit, iseed);
+
+	scoreHeavy(doseCounter, errorCounter, absIndex, nVoxels, energyDeposit, iseed, MSPR, thisOne, material);
 	update(thisOne, 0.0f, thisOne->energy, 0.0f, 0.0f, 0, 0.0f);
 }
 
 
-void hardEvent(PS * thisOne, float stepLength, float4 vox, read_only image2d_t MCS, global float8 * doseCounter, global float8 * errorCounter,
+void hardEvent(PS * thisOne, float stepLength, float4 vox, read_only image2d_t MCS, read_only image2d_t MSPR, float material, global float8 * doseCounter, global float8 * errorCounter,
 			 int absIndex, int nVoxels, global PS * secondary, volatile __global uint * nSecondary, int * iseed, global int * mutex2Secondary){
 	sampler_t sampler = CLK_NORMALIZED_COORDS_FALSE | CLK_ADDRESS_CLAMP_TO_EDGE | CLK_FILTER_LINEAR;
 	float4 mcs = read_imagef(MCS, sampler, (float2)(thisOne->energy/0.5f - 0.5f, 0.5f));
@@ -485,7 +532,7 @@ void hardEvent(PS * thisOne, float stepLength, float4 vox, read_only image2d_t M
 	float rand = MTrng(iseed);
 	rand *= thisOne->maxSigma > sig ? thisOne->maxSigma : sig;
 	if(rand < sigIon){
-		ionization(thisOne, doseCounter, errorCounter, absIndex, nVoxels, iseed, stepLength);
+		ionization(thisOne, doseCounter, errorCounter, absIndex, nVoxels, iseed, stepLength, MSPR, material);
 		return;
 	}
 	else if(rand < sigIon + sigPPE){
@@ -495,14 +542,32 @@ void hardEvent(PS * thisOne, float stepLength, float4 vox, read_only image2d_t M
 	}
 	else if(rand < sigIon + sigPPE + sigPOE){
 		if(thisOne->energy > POETHRESHOLD)
-			POElastic(thisOne, doseCounter, errorCounter, absIndex, nVoxels, iseed);
+			POElastic(thisOne, doseCounter, errorCounter, absIndex, nVoxels, iseed, MSPR, material);
 		return;
 	} 
 	else if(rand < sigIon+sigPPE + sigPOE + sigPOI){
 		if(thisOne->energy > POITHRESHOLD)
-			POInelastic(thisOne, secondary, nSecondary, doseCounter, errorCounter, absIndex, nVoxels, iseed, mutex2Secondary);
+			POInelastic(thisOne, secondary, nSecondary, doseCounter, errorCounter, absIndex, nVoxels, iseed, mutex2Secondary, MSPR, material);
 		return;
 	}
+}
+
+void rayTrace(PS * particle, int3 phantomSize, float3 voxSize){
+	float3 phantomBoundary1, phantomBoundary2;
+	phantomBoundary1 = -convert_float3(phantomSize)*voxSize/2.0f;
+	phantomBoundary2 = convert_float3(phantomSize)*voxSize/2.0f;
+
+	float3 delta1, delta2, delta;
+	delta1 = (phantomBoundary1 - particle->pos)/particle->dir;
+	delta2 = (phantomBoundary2 - particle->pos)/particle->dir;
+	delta =	fmin(delta1, delta2);
+
+	float translation = fmax(fmax(delta.x, delta.y), delta.z);
+//	printf("particle pos = %f, %f, %f, dir = %f, %f, %f, delta = %v3f, translation = %f\n", 
+//		particle->pos.x, particle->pos.y, particle->pos.z, particle->dir.x, particle->dir.y, particle->dir.z, delta, translation);	
+	update(particle, translation + 1e-5, 0.0, 0.0, 0.0, 0, 0.0);
+//	printf("particle pos = %f, %f, %f, dir = %f, %f, %f, delta = %v3f, translation = %f\n", 
+//		particle->pos.x, particle->pos.y, particle->pos.z, particle->dir.x, particle->dir.y, particle->dir.z, delta, translation);
 }
 
 
@@ -512,6 +577,8 @@ __kernel void propagate(__global PS * particle, __global float8 * doseCounter, _
 		
 	size_t gid = get_global_id(0);
 	PS thisOne = particle[gid];
+	
+
 //	printf("size of PS in kernel = %d\n", sizeof(PS));
 	
 //	if(thisOne.ifPrimary == 0){
@@ -519,13 +586,16 @@ __kernel void propagate(__global PS * particle, __global float8 * doseCounter, _
 //		printf("simulated proton status: energy %f, pos %v3f, dir %v3f, ifPrimary %d, mass %f, charge %f, maxSigma %f\n", thisOne.energy, thisOne.pos, thisOne.dir, thisOne.ifPrimary, thisOne.mass, thisOne.charge, thisOne.maxSigma);
 //	}
 
+
+
 	int3 phantomSize = (int3)(get_image_width(voxels), get_image_height(voxels), get_image_depth(voxels));
+//	printf("phantomSize = %v3d\n", phantomSize);
 	int nVoxels = phantomSize.x * phantomSize.y * phantomSize.z;
 
-	float stepLength, stepInWater, thisMaxStep, step2bound, energyTransfer, sigma1, sigma2, sigma, sampledStep, variance, theta0, theta, phi, deflection, z1, z2, es;
+	float stepLength, stepInWater, thisMaxStep, step2bound, energyTransfer, sigma1, sigma2, sigma, sampledStep, variance, theta0, theta, phi, es;
 	es = 17.5f;
-	float3 voxIndex;
-	int absIndex, crossBound;
+	int3 voxIndex;
+	int absIndex, crossBound = 0;
 	int iseed[2];
 	iseed[0] = gid;
 	iseed[1] = randSeed;
@@ -535,38 +605,50 @@ __kernel void propagate(__global PS * particle, __global float8 * doseCounter, _
 	float4 vox;
 	bool ifHard;
 	int step = 0;
+	
+	if(!ifInsidePhantom(particle->pos, voxSize, phantomSize, &voxIndex, &absIndex))
+		rayTrace(&thisOne, phantomSize, voxSize);
 
-	while (ifInsidePhantom(thisOne.pos, voxSize, phantomSize)){
+	while (ifInsidePhantom(thisOne.pos, voxSize, phantomSize, &voxIndex, &absIndex)){
 		step++;
-		voxIndex = thisOne.pos / voxSize + convert_float3(phantomSize)*0.5f;
-		absIndex = convert_int_rtn(voxIndex.x) + convert_int_rtn(voxIndex.y)*phantomSize.x + convert_int_rtn(voxIndex.z)*phantomSize.x*phantomSize.y;
-		vox = read_imagef(voxels, voxSampler, (float4)(voxIndex, 0.0f));
-		vox.s2 = 1.0f;
-		vox.s3 = 1.0f;
+		
+//		printf("step = %d\n", step);
+
+		vox = read_imagef(voxels, voxSampler, (float4)(convert_float3(voxIndex), 0.0f));
+//		printf("vox = %v4f\n", vox);
+		if(vox.s0 < -800.0f){
+			update(&thisOne, step2VoxBoundary(thisOne.pos, thisOne.dir, voxSize, &crossBound, phantomSize, voxIndex), 0, 0, 0, crossBound, 0.0f);
+			continue;
+		}
 //		if(absIndex != absIndex2){
 //			absIndex = absIndex2;
 //			scoreFluence(doseCounter, absIndex, thisOne.ifPrimary);
 //		}
-
-//		printf("voxSize %v3f, position %v3f, energy %f, voxel %v3f, abs voxel %d\n", voxSize, thisOne.pos, thisOne.energy, voxIndex, absIndex);
+		if(step > 2000){
+			printf("\nvoxIndex = %v3d, absIndex = %d\n", voxIndex, absIndex);
+			printf("energy %f, dir %v3f, position %v3f\n", thisOne.energy, thisOne.dir, thisOne.pos);
+		
+		}
 
 
 		if (thisOne.energy <= MINPROTONENERGY){
 			stepInWater = thisOne.energy / read_imagef(RSPW, dataSampler, (float2)(thisOne.energy/0.5f - 0.5f, 0.5f)).s0;
 			stepLength = stepInWater*WATERDENSITY / vox.s2 / read_imagef(MSPR, dataSampler, (float2)(thisOne.energy - 0.5f, vox.s1 + 0.5f)).s0;
-			score(doseCounter, errorCounter, absIndex, nVoxels, thisOne.energy, stepLength, thisOne.ifPrimary, iseed);
+			energyTransfer = thisOne.energy;			
+			score(doseCounter, errorCounter, absIndex, nVoxels, energyTransfer, stepLength, thisOne.ifPrimary, iseed, MSPR, &thisOne, vox.s1);
 			scoreFluence(doseCounter, errorCounter, absIndex, nVoxels, thisOne.ifPrimary, stepLength, mutex, iseed);
 			return;
 		}
 
 		// rescale maxStep to let energy transferred in one step < MAXENERGYRATIO
 		thisMaxStep = MAXSTEP;
-		step2bound = step2VoxBoundary(thisOne.pos, thisOne.dir, voxSize, &crossBound);
+		step2bound = step2VoxBoundary(thisOne.pos, thisOne.dir, voxSize, &crossBound, phantomSize, voxIndex);
 		energyTransfer = energyInOneStep(vox, &thisOne, RSPW, MSPR, thisMaxStep);
 		if (energyTransfer > MAXENERGYRATIO*thisOne.energy){
 			stepInWater = MAXENERGYRATIO*thisOne.energy / read_imagef(RSPW, dataSampler, (float2)((1 - 0.5f*MAXENERGYRATIO)*thisOne.energy/0.5f - 0.5f, 0.5f)).s0;
 			thisMaxStep = stepInWater*WATERDENSITY / vox.s2 / read_imagef(MSPR, dataSampler, (float2)((1 - 0.5f*MAXENERGYRATIO)*thisOne.energy - 0.5f, vox.s1 + 0.5f)).s0;
 		}
+
 
 
 		// get linear macro cross section to sample a step
@@ -588,7 +670,8 @@ __kernel void propagate(__global PS * particle, __global float8 * doseCounter, _
 			crossBound = 0;
 		}
 
-//		printf("sample step: if crossBound %d, steplength %f\n", crossBound, stepLength);
+		if(step > 2000)
+			printf("sample step = %f, maxStep = %f, if crossBound = %d, step2Bound = %f, steplength: %f\n", sampledStep, thisMaxStep, crossBound, step2bound, stepLength);
 
 		// get energy transferred (plus energy straggling) in this sampled step
 		energyTransfer = energyInOneStep(vox, &thisOne, RSPW, MSPR, stepLength);
@@ -607,16 +690,15 @@ __kernel void propagate(__global PS * particle, __global float8 * doseCounter, _
 		theta = MTGaussian(iseed) * theta0;
 		phi = 2.0f*PI*MTrng(iseed);
 		thisOne.maxSigma = sigma;
-		update(&thisOne, stepLength, energyTransfer, theta, phi, crossBound, 0.0f);
-		score(doseCounter, errorCounter, absIndex, nVoxels, energyTransfer, stepLength, thisOne.ifPrimary, iseed);
+		update(&thisOne, stepLength, energyTransfer, theta, phi, crossBound, 0.0f);		
+		score(doseCounter, errorCounter, absIndex, nVoxels, energyTransfer, stepLength, thisOne.ifPrimary, iseed, MSPR, &thisOne, vox.s1);
 		scoreFluence(doseCounter, errorCounter, absIndex, nVoxels, thisOne.ifPrimary, stepLength, mutex, iseed);
 
 		//hard event
 		if(!ifHard)
 			continue;
 
-		hardEvent(&thisOne, stepLength, vox, MCS, doseCounter, errorCounter, absIndex, nVoxels, secondary, nSecondary, iseed, mutex);
-
+		hardEvent(&thisOne, stepLength, vox, MCS, MSPR, vox.s1, doseCounter, errorCounter, absIndex, nVoxels, secondary, nSecondary, iseed, mutex);
 
 	}
 	

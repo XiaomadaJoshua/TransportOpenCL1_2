@@ -15,6 +15,7 @@
 #define MAXENERGYRATIO 0.25 //Max energy decay ratio of initial energy in a step
 #define MINPROTONENERGY 1.0 //Min proton energy to transport
 #define ZERO 1e-6
+#define EPSILON 1e-20
 #define MC 11177.928732 //carbon mass in MeV
 #define CC 6.0000 //carbon charge
 #define MINCARBONENERGY 5.0 //Min carbon energy to transport in MeV
@@ -22,7 +23,8 @@
 #define PPETHRESHOLD 10.0 // energy threshold of proton proton interaction
 #define POETHRESHOLD 7.0 // energy threshold of proton oxygen elastic interaction
 #define POITHRESHOLD 20.0 // energy threshold of proton oxygen inelastic interaction
-#define NDOSECOUNTERS 3 // number of dosecounters
+#define NDOSECOUNTERS 2 // number of dosecounters
+
 
 #define MIN(a,b) (a > b ? b : a)
 #define MIN3(a,b,c) (a > b ? b : a) > c ? c : (a > b ? b : a)
