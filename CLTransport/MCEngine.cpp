@@ -13,6 +13,7 @@
 #include "Phantom.h"
 #include "OpenCLStuff.h"
 #include <stdio.h>
+#include <ctime>
 
 
 
@@ -88,20 +89,27 @@ MCEngine::MCEngine(const char * file){
 
 
 void MCEngine::simulate(float minEnergy){
+	std::clock_t start = std::clock();
+	double duration;
 	int i = 0;
 	while (primary->nParticlesLeft() != 0){
 		primary->reload(stuff);
 		primary->propagate(stuff, phantom, macroSigma, rspw, mspr, secondary);
+		std::cout << "simulate primary protons in batch " << i+1 << std::endl;
 		secondary->propagate(stuff, phantom, macroSigma, rspw, mspr, secondary);
+		std::cout << "simulate secondary protons in batch " << i+1 << std::endl;
 		phantom->tempStore(stuff);
 		i++;
 	}
 	secondary->clear(stuff, phantom, macroSigma, rspw, mspr);
 	phantom->tempStore(stuff);
 	phantom->finalize(stuff, nPaths);
+	
+	duration = (std::clock() - start)/(double)CLOCKS_PER_SEC;
 	phantom->output(stuff, outDir);
-
+	
 	std::cout << "number of batches: " << i << std::endl;
+	std::cout << "total simulation time: " << duration << std::endl;
 }
 
 
