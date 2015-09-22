@@ -24,7 +24,7 @@ void ParticleStatus::buildProgram(OpenCLStuff & stuff){
 	OpenCLStuff::convertToString("ParticleStatus.cl", source);
 	int err;
 	program = cl::Program(stuff.context, source);
-	err = program.build("-cl-single-precision-constant");
+	err = program.build("-cl-single-precision-constant -I.");
 	std::string info;
 	info = program.getBuildInfo<CL_PROGRAM_BUILD_LOG>(stuff.device);
 	if (err != 0){

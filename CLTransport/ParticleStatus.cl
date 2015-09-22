@@ -3,6 +3,8 @@
 
 #define __SCOREDOSE2WATER__ 0
 //	if __SCOREDOSE2WATER__ is turned on, 1--on, 0--off
+#define __ONLYEM__ 1
+//	if only EM interaction is turned on, 1--on, 0--off
 
 typedef struct __attribute__ ((aligned)) ParticleStatus{
 	float3 pos, dir;
@@ -133,6 +135,9 @@ float energyInOneStep(float4 vox, PS * particle, read_only image2d_t RSPW, read_
 inline float totalLinearSigma(float4 vox, read_only image2d_t MCS, float e) {
 	sampler_t sampler = CLK_NORMALIZED_COORDS_FALSE | CLK_ADDRESS_CLAMP_TO_EDGE | CLK_FILTER_LINEAR;
 	float4 mcs = read_imagef(MCS, sampler, (float2)(e/0.5f - 0.5f, 0.5f));
+	#if defined(__ONLYEM__) && (__ONLYEM__ == 1)
+	return mcs.s0*vox.s3;
+	#endif
 	return mcs.s0*vox.s3 + (mcs.s1 + mcs.s2 + mcs.s3)*vox.s2;
 }
 
@@ -528,6 +533,9 @@ void hardEvent(PS * thisOne, float stepLength, float4 vox, read_only image2d_t M
 	float sigPOE = mcs.s2*vox.s2;
 	float sigPOI = mcs.s3*vox.s2;
 	float sig = sigIon + sigPPE + sigPOE + sigPOI;
+	#if defined(__ONLYEM__) && (__ONLYEM__ == 1)
+	sig = sigIon;
+	#endif
 
 	float rand = MTrng(iseed);
 	rand *= thisOne->maxSigma > sig ? thisOne->maxSigma : sig;
@@ -535,6 +543,7 @@ void hardEvent(PS * thisOne, float stepLength, float4 vox, read_only image2d_t M
 		ionization(thisOne, doseCounter, errorCounter, absIndex, nVoxels, iseed, stepLength, MSPR, material);
 		return;
 	}
+	#if defined(__ONLYEM__) && (__ONLYEM__ == 0)
 	else if(rand < sigIon + sigPPE){
 		if(thisOne->energy > PPETHRESHOLD)
 			PPElastic(thisOne, secondary, nSecondary, iseed, mutex2Secondary);
@@ -550,6 +559,7 @@ void hardEvent(PS * thisOne, float stepLength, float4 vox, read_only image2d_t M
 			POInelastic(thisOne, secondary, nSecondary, doseCounter, errorCounter, absIndex, nVoxels, iseed, mutex2Secondary, MSPR, material);
 		return;
 	}
+	#endif
 }
 
 void rayTrace(PS * particle, int3 phantomSize, float3 voxSize){
@@ -624,11 +634,10 @@ __kernel void propagate(__global PS * particle, __global float8 * doseCounter, _
 //			absIndex = absIndex2;
 //			scoreFluence(doseCounter, absIndex, thisOne.ifPrimary);
 //		}
-		if(step > 2000){
-			printf("\nvoxIndex = %v3d, absIndex = %d\n", voxIndex, absIndex);
-			printf("energy %f, dir %v3f, position %v3f\n", thisOne.energy, thisOne.dir, thisOne.pos);
-		
-		}
+//		if(step > 2000){
+//			printf("\nvoxIndex = %v3d, absIndex = %d\n", voxIndex, absIndex);
+//			printf("energy %f, dir %v3f, position %v3f\n", thisOne.energy, thisOne.dir, thisOne.pos);	
+//		}
 
 
 		if (thisOne.energy <= MINPROTONENERGY){
@@ -670,8 +679,8 @@ __kernel void propagate(__global PS * particle, __global float8 * doseCounter, _
 			crossBound = 0;
 		}
 
-		if(step > 2000)
-			printf("sample step = %f, maxStep = %f, if crossBound = %d, step2Bound = %f, steplength: %f\n", sampledStep, thisMaxStep, crossBound, step2bound, stepLength);
+//		if(step > 2000)
+//			printf("sample step = %f, maxStep = %f, if crossBound = %d, step2Bound = %f, steplength: %f\n", sampledStep, thisMaxStep, crossBound, step2bound, stepLength);
 
 		// get energy transferred (plus energy straggling) in this sampled step
 		energyTransfer = energyInOneStep(vox, &thisOne, RSPW, MSPR, stepLength);

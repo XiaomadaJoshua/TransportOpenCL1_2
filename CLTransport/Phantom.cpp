@@ -82,7 +82,7 @@ Phantom::Phantom(OpenCLStuff & stuff, cl_float3 voxSize_, cl_int3 size_, const D
 	std::string source;
 	OpenCLStuff::convertToString("Phantom.cl", source);
 	program = cl::Program(stuff.context, source);
-	err = program.build("-cl-single-precision-constant");
+	err = program.build("-cl-single-precision-constant -I.");
 	std::string info;
 	info = program.getBuildInfo<CL_PROGRAM_BUILD_LOG>(stuff.device);
 		if (err != 0){

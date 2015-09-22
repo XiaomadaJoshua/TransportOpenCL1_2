@@ -69,7 +69,7 @@ MCEngine::MCEngine(const char * file){
 	ifs.getline(buff, 300);
 	std::string CTFile;
 	getline(ifs, CTFile);
-	if (CTFile == "null")
+	if (CTFile.find("null") != string::npos)
 		phantom = new Phantom(stuff, voxSize, size, *densCorrection, *mspr, NULL);
 	else
 		phantom = new Phantom(stuff, voxSize, size, *densCorrection, *mspr, CTFile.c_str());
