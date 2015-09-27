@@ -77,7 +77,11 @@ Phantom::Phantom(OpenCLStuff & stuff, cl_float3 voxSize_, cl_int3 size_, const D
 	// 0 in float8 is total dose, 1 in float8 is primary fluence, 2 in float8 is secondary fluence, 3 in float8 is primary LET, 4 in float8 is secondary LET, 5 in float8 is primary dose,
 	// 6 in float8 is secondary dose, 7 in float8 is heavy dose.
 	doseCounter = cl::Buffer(stuff.context, CL_MEM_READ_WRITE, sizeof(cl_float8)*nVoxels*NDOSECOUNTERS, NULL, &err);
-	errorCounter = cl::Buffer(stuff.context, CL_MEM_READ_WRITE, sizeof(cl_float8)*nVoxels*NDOSECOUNTERS, NULL, &err);
+	if (err != 0){
+		std::cout << "dose counter initialize failed. Maybe too many dose counters.\n" << std::endl;
+		exit(1);
+	}
+//	errorCounter = cl::Buffer(stuff.context, CL_MEM_READ_WRITE, sizeof(cl_float8)*nVoxels*NDOSECOUNTERS, NULL, &err);
 
 	std::string source;
 	OpenCLStuff::convertToString("Phantom.cl", source);
@@ -94,7 +98,7 @@ Phantom::Phantom(OpenCLStuff & stuff, cl_float3 voxSize_, cl_int3 size_, const D
 	cl::NDRange globalRange(nVoxels*NDOSECOUNTERS);
 	cl::EnqueueArgs arg(stuff.queue, globalRange);
 	initDoseCounterKernel(arg, doseCounter);
-	initDoseCounterKernel(arg, errorCounter);
+//	initDoseCounterKernel(arg, errorCounter);
 //	err = stuff.queue.finish();
 
 	doseBuff = cl::Buffer(stuff.context, CL_MEM_READ_WRITE, sizeof(cl_float8)*nVoxels, NULL, &err);
@@ -215,10 +219,10 @@ cl_float Phantom::ct2eden(cl_float material, cl_float density) const{
 }
 
 void Phantom::finalize(OpenCLStuff & stuff, cl_uint nPaths){
-	cl::make_kernel<cl::Buffer &, cl::Buffer &, cl::Image3D &, cl_float3, cl_uint> finalizeKernel(program, "finalize");
+	cl::make_kernel<cl::Buffer &, cl::Buffer &, cl::Buffer &, cl::Image3D &, cl_float3, cl_uint> finalizeKernel(program, "finalize");
 	cl::NDRange globalRange(size.s[0], size.s[1], size.s[2]);
 	cl::EnqueueArgs arg(stuff.queue, globalRange);
-	finalizeKernel(arg, doseBuff, errorBuff, voxelAttributes, voxSize, nPaths);
+	finalizeKernel(arg, doseCounter, doseBuff, errorBuff, voxelAttributes, voxSize, nPaths);
 }
 
 void Phantom::output(OpenCLStuff & stuff, std::string & outDir){
@@ -358,9 +362,10 @@ void Phantom::output(OpenCLStuff & stuff, std::string & outDir){
 	ofsSDErr.close();
 }
 
+/*
 void Phantom::tempStore(OpenCLStuff & stuff){
 	cl::make_kernel<cl::Buffer &, cl::Buffer &, cl::Buffer &, cl::Buffer &> tempStoreKernel(program, "tempStore");
 	cl::NDRange globalRange(size.s[0], size.s[1], size.s[2]);
 	cl::EnqueueArgs arg(stuff.queue, globalRange);
 	tempStoreKernel(arg, doseCounter, doseBuff, errorCounter, errorBuff);
-}
+}*/

@@ -11,11 +11,11 @@ public:
 	virtual ~Phantom();
 	cl::Image3D & voxelGPU(){ return voxelAttributes; }
 	cl::Buffer & doseCounterGPU(){ return doseCounter; }
-	cl::Buffer & errorCounterGPU(){ return errorCounter; }
+//	cl::Buffer & errorCounterGPU(){ return errorCounter; }
 	cl_float3 voxelSize() const { return voxSize; }
 	void finalize(OpenCLStuff & stuff, cl_uint nPaths);
 	void output(OpenCLStuff & stuff, std::string & outDir);
-	void tempStore(OpenCLStuff & stuff);
+//	void tempStore(OpenCLStuff & stuff);
 
 private:
 	cl_float3 voxSize;
@@ -27,7 +27,7 @@ private:
 	// 6 in float8 is secondary dose, 7 in float8 is heavy dose.
 	cl::Buffer doseCounter;
 	cl::Buffer doseBuff;
-	cl::Buffer errorCounter;
+//	cl::Buffer errorCounter;
 	cl::Buffer errorBuff;
 
 	cl_float * totalDose;

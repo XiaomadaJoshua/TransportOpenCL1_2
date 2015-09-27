@@ -6,55 +6,49 @@ __kernel void initializeDoseCounter(__global float8 * doseCounter){
 }
 
 
-__kernel void finalize(__global float8 * doseBuff, __global float8 * errorBuff, read_only image3d_t voxels, float3 voxSize, uint nPaths){
+__kernel void finalize(__global float8 * doseCounter, __global float8 * doseBuff, __global float8 * errorBuff, read_only image3d_t voxels, float3 voxSize, uint nPaths){
 	size_t idx = get_global_id(0);
 	size_t idy = get_global_id(1);
 	size_t idz = get_global_id(2);
-	size_t absId = idx + idy*get_global_size(0) + idz*get_global_size(0)*get_global_size(1);
-
+	size_t sizeX = get_global_size(0), sizeY = get_global_size(1), sizeZ = get_global_size(2);
+	size_t absId = idx + idy*sizeX + idz*sizeX*sizeY;
+	size_t nVoxels = sizeX*sizeY*sizeZ;
 	sampler_t voxSampler = CLK_NORMALIZED_COORDS_FALSE | CLK_ADDRESS_CLAMP_TO_EDGE | CLK_FILTER_NEAREST;
 	float4 vox = read_imagef(voxels, voxSampler, (float4)(idx, idy, idz, 0.0f));
 	float volume = voxSize.x*voxSize.y*voxSize.z;
 	float mass = vox.s2*volume;
-	float8 dose = doseBuff[absId];
-	float8 error = errorBuff[absId];
+	float8 mean = 0.0f, var = 0.0f, std;
 
-	// 0 in float8 is total dose, 1 in float8 is primary fluence, 2 in float8 is secondary fluence, 3 in float8 is primary LET, 4 in float8 is secondary LET, 
+	for(int i = 0; i < NDOSECOUNTERS; i++){
+		mean += doseCounter[absId + i*nVoxels];
+		var += doseCounter[absId + i*nVoxels]*doseCounter[absId + i*nVoxels];
+	}
+
+	std = sqrt(NDOSECOUNTERS*var - mean*mean);
+
+// 0 in float8 is total dose, 1 in float8 is primary fluence, 2 in float8 is secondary fluence, 3 in float8 is primary LET, 4 in float8 is nothing, 
 	//5 in float8 is primary dose, 6 in float8 is secondary dose, 7 in float8 is heavy dose.
-	dose.s0 = dose.s0/mass;
-	dose.s1 = dose.s1/volume;
-	dose.s2 = dose.s2/volume;
+	mean.s0 = mean.s0/mass/nPaths;
+	mean.s5 = mean.s5/mass/nPaths;
+	mean.s6 = mean.s6/mass/nPaths;
+	mean.s7 = mean.s7/mass/nPaths;
+	mean.s1 = mean.s1/volume/nPaths;
+	mean.s2 = mean.s2/volume/nPaths;
+	if(mean.s0 > ZERO)
+		mean.s3 = mean.s3/vox.s2/mean.s0/nPaths;
 	
-	if(dose.s0 > 0){
-		dose.s3 = dose.s3/dose.s0/vox.s2;
-		dose.s4 = dose.s4/dose.s0/vox.s2;
-	}
-
-	dose.s5 =  dose.s5/mass;
-	dose.s6 =  dose.s6/mass;
-	dose.s7 =  dose.s7/mass;
-
-	dose = dose/nPaths;
-
 	
-	error.s0 = error.s0/mass/mass;
-	error.s1 = error.s1/volume/volume;
-	error.s2 = error.s2/volume/volume;
-	
-	if(error.s0 > 0){
-		error.s3 = error.s3/dose.s0/vox.s2/dose.s0/vox.s2;
-		error.s4 = error.s4/dose.s0/vox.s2/dose.s0/vox.s2;
-	}
+	std.s0 = std.s0/mass/nPaths;
+	std.s5 = std.s5/mass/nPaths;
+	std.s6 = std.s6/mass/nPaths;
+	std.s7 = std.s7/mass/nPaths;
+	std.s1 = std.s1/volume/nPaths;
+	std.s2 = std.s2/volume/nPaths;
+	if(mean.s0 > ZERO)
+		std.s3 = std.s3/vox.s2/mean.s0/nPaths;
 
-	error.s5 =  error.s5/mass/mass;
-	error.s6 =  error.s6/mass/mass;
-	error.s7 =  error.s7/mass/mass;
-
-	error = error/nPaths;
-	error = sqrt((error - dose*dose)/nPaths);
-
-	doseBuff[absId] = dose;
-	errorBuff[absId] = error;
+	doseBuff[absId] = mean;
+	errorBuff[absId] = std;
 
 //	if(doseBuff[absId].s0 > 0.0f)
 //		printf("buff, %v8f\n", doseBuff[absId]);
