@@ -605,7 +605,7 @@ __kernel void propagate(__global PS * particle, __global float8 * doseCounter,
 	bool ifHard;
 	int step = 0;
 	
-	if(!ifInsidePhantom(particle->pos, voxSize, phantomSize, &voxIndex, &absIndex))
+	if(!ifInsidePhantom(thisOne.pos, voxSize, phantomSize, &voxIndex, &absIndex))
 		rayTrace(&thisOne, phantomSize, voxSize);
 
 	while (ifInsidePhantom(thisOne.pos, voxSize, phantomSize, &voxIndex, &absIndex)){
