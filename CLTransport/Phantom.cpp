@@ -49,6 +49,7 @@ Phantom::Phantom(OpenCLStuff & stuff, cl_float3 voxSize_, cl_int3 size_, const D
 			
 //			densityCheck[i] = attributes[i].s[2];
 		}
+		delete[] CT;
 		
 //		std::ofstream ofsDensity("Output/density", std::ios::out | std::ios::trunc | std::fstream::binary);
 //		ofsDensity.write((const char *)(densityCheck), nVoxels * sizeof(float) / sizeof(char));
