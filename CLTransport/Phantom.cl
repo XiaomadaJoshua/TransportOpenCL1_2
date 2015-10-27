@@ -1,4 +1,4 @@
-#include "Macro.h"
+//#include "Macro.h"
 
 __kernel void initializeDoseCounter(__global float8 * doseCounter){
 	size_t gid = get_global_id(0);
@@ -22,6 +22,8 @@ __kernel void finalize(__global float8 * doseCounter, __global float8 * doseBuff
 	for(int i = 0; i < NDOSECOUNTERS; i++){
 		mean += doseCounter[absId + i*nVoxels];
 		var += doseCounter[absId + i*nVoxels]*doseCounter[absId + i*nVoxels];
+//		if(idx == 25 && idy == 25 && idz == 0)
+//			printf("%v8f\n", doseCounter[absId + i*nVoxels]);
 	}
 
 	std = sqrt(NDOSECOUNTERS*var - mean*mean);
@@ -48,14 +50,17 @@ __kernel void finalize(__global float8 * doseCounter, __global float8 * doseBuff
 		std.s3 = std.s3/vox.s2/mean.s0/nPaths;
 
 	doseBuff[absId] = mean;
+//	if(idx == 25 && idy == 25 && idz == 0)
+//		printf("%f\n", doseBuff[absId].s1);
 	errorBuff[absId] = std;
+//	if(idx == 25 && idy == 25 && idz == 0)
+//		printf("%f\n", errorBuff[absId].s1);
 
 //	if(doseBuff[absId].s0 > 0.0f)
 //		printf("buff, %v8f\n", doseBuff[absId]);
 }
 
-__kernel void tempStore(__global float8 * doseCounter, __global float8 * doseBuff, 
-					__global float8 * errorCounter, __global float8 * errorBuff){
+__kernel void tempStore(__global float8 * doseCounter, __global float8 * batchBuff){
 	size_t idx = get_global_id(0);
 	size_t idy = get_global_id(1);
 	size_t idz = get_global_id(2);
@@ -65,10 +70,13 @@ __kernel void tempStore(__global float8 * doseCounter, __global float8 * doseBuf
 //	printf("idx = %d, idy = %d, idz = %d, absId = %d, nVoxels = %d\n", idx, idy, idz, absId, nVoxels);
 	
 	for(int i  = 0; i < NDOSECOUNTERS; i++){
-		doseBuff[absId] += doseCounter[absId + i*nVoxels];
-		errorBuff[absId] += errorCounter[absId + i*nVoxels];
+//		if(idx == 25 && idy == 25 && idz == 0)
+//			printf("%f\n", doseCounter[absId + i*nVoxels].s1);
+		batchBuff[absId + i*nVoxels] += doseCounter[absId + i*nVoxels];
 		doseCounter[absId + i*nVoxels] = 0;
-		errorCounter[absId + i*nVoxels] = 0;
+
+//		if(idx == 25 && idy == 25 && idz == 2)
+//			printf("%v8f\n", doseCounter[absId + i*nVoxels]);
 	}
 //	if(doseBuff[absId].s0 > 0.0f)
 //		printf("buff, %v8f\n", doseBuff[absId]);

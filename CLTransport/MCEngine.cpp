@@ -89,20 +89,20 @@ MCEngine::MCEngine(const char * file){
 
 
 void MCEngine::simulate(float minEnergy){
+	srand((unsigned int)time(NULL));
 	std::clock_t start = std::clock();
 	double duration;
 	int i = 0;
 	while (primary->nParticlesLeft() != 0){
 		primary->reload(stuff);
+		std::cout << "simulation batch " << i + 1 << std::endl;
 		primary->propagate(stuff, phantom, macroSigma, rspw, mspr, secondary);
-		std::cout << "simulate primary protons in batch " << i+1 << std::endl;
 		secondary->propagate(stuff, phantom, macroSigma, rspw, mspr, secondary);
-		std::cout << "simulate secondary protons in batch " << i+1 << std::endl;
-//		phantom->tempStore(stuff);
+		phantom->tempStore(stuff);
 		i++;
 	}
 	secondary->clear(stuff, phantom, macroSigma, rspw, mspr);
-//	phantom->tempStore(stuff);
+	phantom->tempStore(stuff);
 	phantom->finalize(stuff, nPaths);
 	
 	duration = (std::clock() - start)/(double)CLOCKS_PER_SEC;

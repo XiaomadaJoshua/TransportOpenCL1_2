@@ -52,11 +52,43 @@ float MTExp(int * iseed, float lambda){
 }
 
 
+#define M1 2147483647
+#define M2 2147483399
+#define A1 40015
+#define A2 40692
+#define Q1 ( M1 / A1 )
+#define Q2 ( M2 / A2 )
+#define R1 ( M1 % A1 )
+#define R2 ( M2 % A2 )
 
 
+/* Dual-Phase Linear Congruential Generator */
+int jswRand(int * seed)
+{
+	int result;
 
+	seed[0] = A1 * (seed[0] % Q1) - R1 * (seed[0] / Q1);
+	seed[1] = A2 * (seed[1] % Q2) - R2 * (seed[1] / Q2);
 
+	if (seed[0] <= 0)
+	{
+		seed[0] += M1;
+	}
 
+	if (seed[1] <= 0)
+	{
+		seed[1] += M2;
+	}
+
+	result = seed[0] - seed[1];
+
+	if (result < 1)
+	{
+		result += M1 - 1;
+	}
+
+	return result;
+}
 
 
 

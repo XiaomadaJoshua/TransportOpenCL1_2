@@ -82,28 +82,37 @@ Phantom::Phantom(OpenCLStuff & stuff, cl_float3 voxSize_, cl_int3 size_, const D
 		std::cout << "dose counter initialize failed. Maybe too many dose counters.\n" << std::endl;
 		exit(1);
 	}
-//	errorCounter = cl::Buffer(stuff.context, CL_MEM_READ_WRITE, sizeof(cl_float8)*nVoxels*NDOSECOUNTERS, NULL, &err);
 
-	std::string source;
+	batchBuff = cl::Buffer(stuff.context, CL_MEM_READ_WRITE, sizeof(cl_float8)*nVoxels*NDOSECOUNTERS, NULL, &err);
+	if (err != 0){
+		std::cout << "batch Buff initialize failed. Maybe too many dose counters.\n" << std::endl;
+		exit(1);
+	}
+
+	std::string source, include;
 	OpenCLStuff::convertToString("Phantom.cl", source);
+	OpenCLStuff::convertToString("Macro.h", include);
+	source = include + source;
 	program = cl::Program(stuff.context, source);
 	err = program.build("-cl-single-precision-constant -I.");
 	std::string info;
 	info = program.getBuildInfo<CL_PROGRAM_BUILD_LOG>(stuff.device);
 		if (err != 0){
-		std::cout << "build result: " << err << std::endl;
-		std::cout << info << std::endl;
-	}
+			std::cout << "build result: " << err << std::endl;
+			std::cout << info << std::endl;
+			exit(-1);
+		}
 	
 	cl::make_kernel<cl::Buffer &> initDoseCounterKernel(program, "initializeDoseCounter", &err);
 	cl::NDRange globalRange(nVoxels*NDOSECOUNTERS);
 	cl::EnqueueArgs arg(stuff.queue, globalRange);
 	initDoseCounterKernel(arg, doseCounter);
-//	initDoseCounterKernel(arg, errorCounter);
-//	err = stuff.queue.finish();
+	initDoseCounterKernel(arg, batchBuff);
+
 
 	doseBuff = cl::Buffer(stuff.context, CL_MEM_READ_WRITE, sizeof(cl_float8)*nVoxels, NULL, &err);
 	errorBuff = cl::Buffer(stuff.context, CL_MEM_READ_WRITE, sizeof(cl_float8)*nVoxels, NULL, &err);
+
 	globalRange = cl::NDRange(nVoxels);
 	cl::EnqueueArgs arg2(stuff.queue, globalRange);
 	initDoseCounterKernel(arg2, doseBuff);
@@ -223,7 +232,7 @@ void Phantom::finalize(OpenCLStuff & stuff, cl_uint nPaths){
 	cl::make_kernel<cl::Buffer &, cl::Buffer &, cl::Buffer &, cl::Image3D &, cl_float3, cl_uint> finalizeKernel(program, "finalize");
 	cl::NDRange globalRange(size.s[0], size.s[1], size.s[2]);
 	cl::EnqueueArgs arg(stuff.queue, globalRange);
-	finalizeKernel(arg, doseCounter, doseBuff, errorBuff, voxelAttributes, voxSize, nPaths);
+	finalizeKernel(arg, batchBuff, doseBuff, errorBuff, voxelAttributes, voxSize, nPaths);
 }
 
 void Phantom::output(OpenCLStuff & stuff, std::string & outDir){
@@ -363,10 +372,10 @@ void Phantom::output(OpenCLStuff & stuff, std::string & outDir){
 	ofsSDErr.close();
 }
 
-/*
+
 void Phantom::tempStore(OpenCLStuff & stuff){
-	cl::make_kernel<cl::Buffer &, cl::Buffer &, cl::Buffer &, cl::Buffer &> tempStoreKernel(program, "tempStore");
+	cl::make_kernel<cl::Buffer &, cl::Buffer &> tempStoreKernel(program, "tempStore");
 	cl::NDRange globalRange(size.s[0], size.s[1], size.s[2]);
 	cl::EnqueueArgs arg(stuff.queue, globalRange);
-	tempStoreKernel(arg, doseCounter, doseBuff, errorCounter, errorBuff);
-}*/
+	tempStoreKernel(arg, doseCounter, batchBuff);
+}

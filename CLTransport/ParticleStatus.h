@@ -9,20 +9,25 @@ class RSPW;
 class MSPR;
 class Secondary;
 
-// use this for visual studio
 
-struct __declspec(align(16)) PS{
-	cl_float3 pos, dir;
-	cl_float energy, maxSigma, mass, charge;
-	cl_int ifPrimary;
-};
 
-/*
+#if(__IFGPU__ == 1)
 struct PS{
 	cl_float3 pos, dir;
 	cl_float energy, maxSigma, mass, charge;
 	cl_int ifPrimary;
-};*/
+};
+#else
+// use this for visual studio
+struct __declspec(align(16)) PS{
+	cl_float3 pos, dir;
+	cl_float energy, maxSigma, mass, charge;
+	cl_int ifPrimary;
+}; 
+#endif
+
+
+
 
 class ParticleStatus
 {

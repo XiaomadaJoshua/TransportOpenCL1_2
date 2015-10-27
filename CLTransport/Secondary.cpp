@@ -1,6 +1,7 @@
 #include "Secondary.h"
 #include "OpenCLStuff.h"
 #include "Macro.h"
+#include <iostream>
 
 
 Secondary::Secondary(OpenCLStuff & stuff)
@@ -18,6 +19,7 @@ void Secondary::propagate(OpenCLStuff & stuff, Phantom * phantom, MacroCrossSect
 
 	stuff.queue.enqueueReadBuffer(nSecondary, CL_TRUE, 0, sizeof(cl_uint), &nParticles);
 	while (size - nParticles > stuff.nBatch()){
+		std::cout << "simulate secondary\n" << std::endl;
 		particleStatus.push_back(cl::Buffer(stuff.context, CL_MEM_READ_WRITE, sizeof(PS)*stuff.nBatch()));
 		stuff.queue.enqueueCopyBuffer(particleStatus[0], particleStatus[1], sizeof(PS)*nParticles, 0, sizeof(PS)*stuff.nBatch());		
 		nParticles += stuff.nBatch();
@@ -34,6 +36,7 @@ void Secondary::clear(OpenCLStuff & stuff, Phantom * phantom, MacroCrossSection 
 	RSPW * resStpPowWater, MSPR * massStpPowRatio){
 	stuff.queue.enqueueReadBuffer(nSecondary, CL_TRUE, 0, sizeof(cl_uint), &nParticles);
 	int err;
+	std::cout << "clear secondary\n" << std::endl;
 	while (nParticles != size){
 		particleStatus.push_back(cl::Buffer(stuff.context, CL_MEM_READ_WRITE, sizeof(PS)*(size - nParticles), NULL, &err));
 		err = stuff.queue.enqueueCopyBuffer(particleStatus[0], particleStatus[1], sizeof(PS)*nParticles, 0, sizeof(PS)*(size - nParticles));

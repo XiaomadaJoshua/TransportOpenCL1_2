@@ -1,6 +1,7 @@
 #include "OpenCLStuff.h"
 #include <vector>
 #include <fstream>
+#include <iostream>
 #include "ParticleStatus.h"
 
 #define SDK_SUCCESS 0
@@ -10,7 +11,11 @@ OpenCLStuff::OpenCLStuff()
 {
 	cl::Platform::get(&platform);
 	std::vector<cl::Device> devs;
+#if(__IFGPU__ == 1)
+	platform.getDevices(CL_DEVICE_TYPE_GPU, &devs);
+#else
 	platform.getDevices(CL_DEVICE_TYPE_CPU, &devs);
+#endif
 	device = devs[0];
 	context = cl::Context(device);
 	queue = cl::CommandQueue(context, device);
@@ -19,6 +24,7 @@ OpenCLStuff::OpenCLStuff()
 	int clockFrequency;
 
 	err = device.getInfo(CL_DEVICE_MAX_COMPUTE_UNITS, &maxComputeUnits);
+	std::cout << "CL_DEVICE_MAX_COMPUTE_UNITS:\t" << maxComputeUnits << std::endl;
 	err = device.getInfo(CL_DEVICE_MAX_WORK_GROUP_SIZE, &maxWorkGroupSize);
 	err = device.getInfo(CL_DEVICE_MAX_WORK_ITEM_SIZES, &maxWorkItemSizes);
 	err = device.getInfo(CL_DEVICE_MAX_MEM_ALLOC_SIZE, &globalMemSize);
@@ -28,7 +34,8 @@ OpenCLStuff::OpenCLStuff()
 
 }
 
-cl_uint OpenCLStuff::nBatch(){ 
+cl_uint OpenCLStuff::nBatch(){
+	return 65536;
 	return globalMemSize / (sizeof(PS)*SECONDARYNUMBERRATIO*2);
 }
 

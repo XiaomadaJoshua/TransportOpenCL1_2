@@ -30,4 +30,4 @@
 #define MIN3(a,b,c) (a > b ? b : a) > c ? c : (a > b ? b : a)
 #define ABS(a) a > 0 ? a : -a
 
-
+#define __IFGPU__ 0

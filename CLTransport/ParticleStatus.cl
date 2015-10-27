@@ -1,5 +1,5 @@
-#include "randomKernel.h"
-#include "Macro.h"
+//#include "randomKernel.h"
+//#include "Macro.h"
 
 #define __SCOREDOSE2WATER__ 0
 //	if __SCOREDOSE2WATER__ is turned on, 1--on, 0--off
@@ -25,7 +25,7 @@ __kernel void initParticles(__global PS * particle, float T, float2 width, float
 	int iseed[2];
 	iseed[0] = randSeed;
 	iseed[1] = gid;
-	MTrng(iseed);
+	jswRand(iseed);
 	particle[gid].pos.x = (MTrng(iseed) - 0.5f) * width.s0;
 	particle[gid].pos.y = (MTrng(iseed) - 0.5f) * width.s1;
 	
@@ -273,7 +273,7 @@ void score(global float8 * doseCounter, int absIndex, int nVoxels, float energyT
 			read_only image2d_t MSPR, PS * thisOne, float material){
 
 	// choose a dose counter
-	int doseCounterId = convert_int_rtn(MTrng(iseed)*NDOSECOUNTERS);
+	int doseCounterId = convert_int_rtn(MTrng(iseed)*(float)(NDOSECOUNTERS));
 
 	volatile global float * counter = &doseCounter[absIndex + doseCounterId * nVoxels];
 
@@ -299,8 +299,7 @@ void score(global float8 * doseCounter, int absIndex, int nVoxels, float energyT
 
 void scoreFluence(global float8 * doseCounter, int absIndex, int nVoxels, int ifPrimary, float fluence, global int * mutex, int * iseed){
 	// choose a dose counter
-	int doseCounterId = convert_int_rtn(MTrng(iseed)*NDOSECOUNTERS);
-
+	int doseCounterId = convert_int_rtn(MTrng(iseed)*(float)(NDOSECOUNTERS));
 	volatile global float * counter = &doseCounter[absIndex + doseCounterId * nVoxels];
 	if(ifPrimary == 1){
 		atomicAdd(counter + 1, fluence);
@@ -326,7 +325,7 @@ void scoreHeavy(global float8 * doseCounter, int absIndex, int nVoxels, float en
 	#endif
 
 	// choose a dose counter
-	int doseCounterId = convert_int_rtn(MTrng(iseed)*NDOSECOUNTERS);
+	int doseCounterId = convert_int_rtn(MTrng(iseed)*(float)(NDOSECOUNTERS));
 	volatile global float * counter = &doseCounter[absIndex + doseCounterId * nVoxels];
 	atomicAdd(counter, energyTransfer);
 	atomicAdd(counter + 7, energyTransfer);
@@ -598,7 +597,7 @@ __kernel void propagate(__global PS * particle, __global float8 * doseCounter,
 	int iseed[2];
 	iseed[0] = gid;
 	iseed[1] = randSeed;
-	MTrng(iseed);
+	jswRand(iseed);
 	sampler_t voxSampler = CLK_NORMALIZED_COORDS_FALSE | CLK_ADDRESS_CLAMP_TO_EDGE | CLK_FILTER_NEAREST;
 	sampler_t dataSampler = CLK_NORMALIZED_COORDS_FALSE | CLK_ADDRESS_CLAMP_TO_EDGE | CLK_FILTER_LINEAR;
 	float4 vox;
@@ -610,7 +609,8 @@ __kernel void propagate(__global PS * particle, __global float8 * doseCounter,
 
 	while (ifInsidePhantom(thisOne.pos, voxSize, phantomSize, &voxIndex, &absIndex)){
 		step++;
-		
+//		if(gid == 0)
+//			printf("%d, %d\n", iseed[0], iseed[1]);
 //		printf("step = %d\n", step);
 
 		vox = read_imagef(voxels, voxSampler, (float4)(convert_float3(voxIndex), 0.0f));

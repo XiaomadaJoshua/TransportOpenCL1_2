@@ -10,7 +10,8 @@
 #include "MCEngine.h"
 #include <string>
 #include <iostream>
-/*
+
+#if(__IFGPU__ == 1)
 #include "DensCorrection.cpp"
 #include "MacroCrossSection.cpp"
 #include "MCEngine.cpp"
@@ -21,7 +22,8 @@
 #include "Proton.cpp"
 #include "RSPW.cpp"
 #include "Secondary.cpp"
-*/
+#endif
+
 int main(){
 	int temp;
 	MCEngine mc("proton_config");
