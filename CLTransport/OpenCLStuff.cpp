@@ -3,13 +3,18 @@
 #include <fstream>
 #include <iostream>
 #include "ParticleStatus.h"
+#include <string>
 
 #define SDK_SUCCESS 0
 #define SDK_FAILURE 1
 
 OpenCLStuff::OpenCLStuff()
 {
+	int err;
+	std::string info;
 	cl::Platform::get(&platform);
+	err = platform.getInfo(CL_PLATFORM_NAME, &info);
+	std::cout << "CL_PLATFORM_NAME:\t" << info << std::endl;
 	std::vector<cl::Device> devs;
 #if(__IFGPU__ == 1)
 	platform.getDevices(CL_DEVICE_TYPE_GPU, &devs);
@@ -17,10 +22,10 @@ OpenCLStuff::OpenCLStuff()
 	platform.getDevices(CL_DEVICE_TYPE_CPU, &devs);
 #endif
 	device = devs[0];
+	err = device.getInfo(CL_DEVICE_NAME, &info);
+	std::cout << "CL_DEVICE_NAME:\t" << info << std::endl;
 	context = cl::Context(device);
 	queue = cl::CommandQueue(context, device);
-	int err;
-
 	int clockFrequency;
 
 	err = device.getInfo(CL_DEVICE_MAX_COMPUTE_UNITS, &maxComputeUnits);

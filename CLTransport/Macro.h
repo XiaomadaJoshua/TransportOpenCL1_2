@@ -19,11 +19,11 @@
 #define MC 11177.928732 //carbon mass in MeV
 #define CC 6.0000 //carbon charge
 #define MINCARBONENERGY 5.0 //Min carbon energy to transport in MeV
-#define SECONDARYNUMBERRATIO 4 // ratio of nbatch over maxWorkGroupSize
+#define SECONDARYNUMBERRATIO 2 // ratio of nbatch over maxWorkGroupSize
 #define PPETHRESHOLD 10.0 // energy threshold of proton proton interaction
 #define POETHRESHOLD 7.0 // energy threshold of proton oxygen elastic interaction
 #define POITHRESHOLD 20.0 // energy threshold of proton oxygen inelastic interaction
-#define NDOSECOUNTERS 10 // number of dosecounters
+#define NDOSECOUNTERS 8 // number of dosecounters
 
 
 #define MIN(a,b) (a > b ? b : a)
@@ -31,3 +31,9 @@
 #define ABS(a) a > 0 ? a : -a
 
 #define __IFGPU__ 0
+#define __LINUX__ 0
+
+#define __SCOREDOSE2WATER__ 0
+//	if __SCOREDOSE2WATER__ is turned on, 1--on, 0--off
+#define __ONLYEM__ 0
+//	if only EM interaction is turned on, 1--on, 0--off

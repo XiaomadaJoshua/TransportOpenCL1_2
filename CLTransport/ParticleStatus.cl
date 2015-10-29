@@ -1,10 +1,7 @@
 //#include "randomKernel.h"
 //#include "Macro.h"
 
-#define __SCOREDOSE2WATER__ 0
-//	if __SCOREDOSE2WATER__ is turned on, 1--on, 0--off
-#define __ONLYEM__ 1
-//	if only EM interaction is turned on, 1--on, 0--off
+
 
 typedef struct __attribute__ ((aligned)) ParticleStatus{
 	float3 pos, dir;

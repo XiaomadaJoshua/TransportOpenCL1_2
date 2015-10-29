@@ -9,10 +9,10 @@ input/densityCorrection.dat
 // beam parameters: width, energy, number of protons, source center
 0  0
 200.00000000
-1000000
+10000
 0.0000	0.00000000	-20.00
 // phantom parameters: vox size, iso center, width, hight, depth
-0.2 0.2	0.1
+0.1 0.1	0.1
 0.00000000 0.00000000 0.00000000
 51	51	300
 // CT directory

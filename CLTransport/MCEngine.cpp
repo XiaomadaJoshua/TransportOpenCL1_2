@@ -95,7 +95,7 @@ void MCEngine::simulate(float minEnergy){
 	int i = 0;
 	while (primary->nParticlesLeft() != 0){
 		primary->reload(stuff);
-		std::cout << "simulation batch " << i + 1 << std::endl;
+		std::cout << std::endl << "simulation batch " << i + 1 << std::endl;
 		primary->propagate(stuff, phantom, macroSigma, rspw, mspr, secondary);
 		secondary->propagate(stuff, phantom, macroSigma, rspw, mspr, secondary);
 		phantom->tempStore(stuff);

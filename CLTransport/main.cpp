@@ -11,7 +11,7 @@
 #include <string>
 #include <iostream>
 
-#if(__IFGPU__ == 1)
+#if(__LINUX__ == 1)
 #include "DensCorrection.cpp"
 #include "MacroCrossSection.cpp"
 #include "MCEngine.cpp"

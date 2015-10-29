@@ -11,7 +11,7 @@ class Secondary;
 
 
 
-#if(__IFGPU__ == 1)
+#if(__LINUX__ == 1)
 struct PS{
 	cl_float3 pos, dir;
 	cl_float energy, maxSigma, mass, charge;
