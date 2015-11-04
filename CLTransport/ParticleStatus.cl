@@ -433,7 +433,7 @@ void POElastic(PS * thisOne, global float8 * doseCounter, int absIndex, int nVox
 	}
 	float meanEnergy = 0.65f*exp(-0.0013f*thisOne->energy) - 0.71f*exp(-0.0177f*thisOne->energy);
 	
-//	meanEnergy = meanEnergy < 1.0f ? 1.0f : meanEnergy;
+	meanEnergy = meanEnergy < 0.0f ? 0.0f : meanEnergy;
 
 	do{
 		energyTransfer = MTExp(iseed, meanEnergy);
