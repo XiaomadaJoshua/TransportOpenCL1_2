@@ -13,18 +13,19 @@ typedef struct __attribute__ ((aligned)) ParticleStatus{
 __kernel void initParticles(__global PS * particle, float T, float2 width, float3 sourceCenter, float m, float c, int randSeed){
 	size_t gid = get_global_id(0);
 	
-//	if(gid == 1){
-//		int size = sizeof(PS);
-//		printf("size of PS: %d\n", size);
-//	}
-
 	particle[gid].pos.z = sourceCenter.z;
 	int iseed[2];
 	iseed[0] = randSeed;
-	iseed[1] = gid;
-	jswRand(iseed);
-	particle[gid].pos.x = (MTrng(iseed) - 0.5f) * width.s0;
-	particle[gid].pos.y = (MTrng(iseed) - 0.5f) * width.s1;
+	iseed[1] = gid*gid;
+	MTrng(iseed);
+	float radius = 0.5;
+
+	float theta = 2.0f*PI*MTrng(iseed);
+	float u = radius*(MTrng(iseed) + MTrng(iseed));
+	float r = u < radius ? u : 2.0f*radius - u;
+
+	particle[gid].pos.x = r*cos(theta);
+	particle[gid].pos.y = r*sin(theta);
 	
 	particle[gid].dir = normalize((float3)(0.0f, 0.0f, 0.0f) - sourceCenter);
 	
@@ -87,19 +88,19 @@ float step2VoxBoundary(float3 pos, float3 dir, float3 voxSize, int * cb, int3 ph
 	if(stepX < stepY){
 		minStep = stepX;
 		if(minStep < stepZ)
-			*cb = 1;
+			*cb = dir.x > 0 ? 1 : -1;
 		else{
 			minStep = stepZ;
-			*cb = 3;
+			*cb = dir.z > 0 ? 3 : -3;
 		}
 	}
 	else{
 		minStep = stepY;
 		if(minStep < stepZ)
-			*cb = 2;
+			*cb = dir.y > 0 ? 2 : -2;
 		else{
 			minStep = stepZ;
-			*cb = 3;
+			*cb = dir.z > 0 ? 3 : -3;
 		}
 	}
 //	printf("pos = %v3f, dir = %v3f, voxSize = %v3f, stepX = %f, stepY = %f, stepZ = %f, cb = %d\n",
@@ -327,6 +328,20 @@ void scoreHeavy(global float8 * doseCounter, int absIndex, int nVoxels, float en
 	atomicAdd(counter, energyTransfer);
 	atomicAdd(counter + 7, energyTransfer);
 }
+
+void scoreSurfaceSpectrum(global float * spectrum, int nBins, int3 nScoringGrids, int3 voxIndex, float energy, int * iseed){
+	if(voxIndex.x != nScoringGrids.x/2 || voxIndex.y != nScoringGrids.y/2)
+		return;
+	if(fabs(energy - (float)(nBins)) < ZERO)
+		energy -= 0.001f;
+	int absIndex = voxIndex.z*nBins + convert_int_rtn(energy);
+	int spectrumCounterId = convert_int_rtn(MTrng(iseed)*NSPECTRUMCOUNTERS);
+//	printf("nBins = %d,absIndex = %d, energy = %f\n", nBins, absIndex, energy);
+
+	volatile global float * counter = &spectrum[absIndex + spectrumCounterId * nBins * nScoringGrids.z];
+	atomicAdd(counter, 1.0f);
+}
+
 
 void store(PS * newOne, __global PS * secondary, volatile __global uint * nSecondary, global int * mutex2Secondary){
 	if(*nSecondary == 0){
@@ -566,7 +581,7 @@ void rayTrace(PS * particle, int3 phantomSize, float3 voxSize){
 }
 
 
-__kernel void propagate(__global PS * particle, __global float8 * doseCounter,
+__kernel void propagate(__global PS * particle, __global float8 * doseCounter, __global float * spectrum, int nBins,
 		__read_only image3d_t voxels, float3 voxSize, __read_only image2d_t MCS, __read_only image2d_t RSPW, 
 		__read_only image2d_t MSPR, __global PS * secondary, volatile __global uint * nSecondary, int randSeed, __global int * mutex){
 		
@@ -590,7 +605,7 @@ __kernel void propagate(__global PS * particle, __global float8 * doseCounter,
 	float stepLength, stepInWater, thisMaxStep, step2bound, energyTransfer, sigma1, sigma2, sigma, sampledStep, variance, theta0, theta, phi, es;
 	es = 17.5f;
 	int3 voxIndex;
-	int absIndex, crossBound = 0;
+	int absIndex = -1, absIndex2 = -1, crossBound = 0;
 	int iseed[2];
 	iseed[0] = gid;
 	iseed[1] = randSeed;
@@ -610,7 +625,14 @@ __kernel void propagate(__global PS * particle, __global float8 * doseCounter,
 //			printf("%d, %d\n", iseed[0], iseed[1]);
 //		printf("step = %d\n", step);
 
+//		printf("simulated proton status: energy %f, pos %v3f, dir %v3f, ifPrimary %d, mass %f, charge %f, maxSigma %f\n", thisOne.energy, thisOne.pos, thisOne.dir, thisOne.ifPrimary, thisOne.mass, thisOne.charge, thisOne.maxSigma);
+
 		vox = read_imagef(voxels, voxSampler, (float4)(convert_float3(voxIndex), 0.0f));
+
+		if(absIndex2 != absIndex && crossBound == 3){
+			absIndex2 = absIndex;
+			scoreSurfaceSpectrum(spectrum, nBins, phantomSize, voxIndex, thisOne.energy, &randSeed);
+		}		
 //		printf("vox = %v4f\n", vox);
 		if(vox.s0 < -800.0f){
 			update(&thisOne, step2VoxBoundary(thisOne.pos, thisOne.dir, voxSize, &crossBound, phantomSize, voxIndex), 0, 0, 0, crossBound, 0.0f);
@@ -624,6 +646,7 @@ __kernel void propagate(__global PS * particle, __global float8 * doseCounter,
 //			printf("\nvoxIndex = %v3d, absIndex = %d\n", voxIndex, absIndex);
 //			printf("energy %f, dir %v3f, position %v3f\n", thisOne.energy, thisOne.dir, thisOne.pos);	
 //		}
+
 
 
 		if (thisOne.energy <= MINPROTONENERGY){

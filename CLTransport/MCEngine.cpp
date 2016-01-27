@@ -70,9 +70,9 @@ MCEngine::MCEngine(const char * file){
 	std::string CTFile;
 	getline(ifs, CTFile);
 	if (CTFile.find("null") != string::npos)
-		phantom = new Phantom(stuff, voxSize, size, *densCorrection, *mspr, NULL);
+		phantom = new Phantom(stuff, voxSize, size, *densCorrection, *mspr, static_cast<int>(energy), NULL);
 	else
-		phantom = new Phantom(stuff, voxSize, size, *densCorrection, *mspr, CTFile.c_str());
+		phantom = new Phantom(stuff, voxSize, size, *densCorrection, *mspr, static_cast<int>(energy), CTFile.c_str());
 
 
 	//initialize secondary particles container

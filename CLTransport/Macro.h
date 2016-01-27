@@ -24,6 +24,7 @@
 #define POETHRESHOLD 7.0 // energy threshold of proton oxygen elastic interaction
 #define POITHRESHOLD 20.0 // energy threshold of proton oxygen inelastic interaction
 #define NDOSECOUNTERS 8 // number of dosecounters
+#define NSPECTRUMCOUNTERS 8 // number of sepctrumcounters
 
 
 #define MIN(a,b) (a > b ? b : a)

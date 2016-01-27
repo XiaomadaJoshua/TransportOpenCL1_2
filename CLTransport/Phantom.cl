@@ -5,8 +5,13 @@ __kernel void initializeDoseCounter(__global float8 * doseCounter){
 	doseCounter[gid] = 0.0f;
 }
 
+__kernel void initializeSpectrum(__global float * spectrum){
+	size_t gid = get_global_id(0);
+	spectrum[gid] = 0.0f;
+}
 
-__kernel void finalize(__global float8 * doseCounter, __global float8 * doseBuff, __global float8 * errorBuff, read_only image3d_t voxels, float3 voxSize, uint nPaths){
+
+__kernel void finalizeDose(__global float8 * doseCounter, __global float8 * doseBuff, __global float8 * errorBuff, read_only image3d_t voxels, float3 voxSize, uint nPaths){
 	size_t idx = get_global_id(0);
 	size_t idy = get_global_id(1);
 	size_t idz = get_global_id(2);
@@ -60,7 +65,7 @@ __kernel void finalize(__global float8 * doseCounter, __global float8 * doseBuff
 //		printf("buff, %v8f\n", doseBuff[absId]);
 }
 
-__kernel void tempStore(__global float8 * doseCounter, __global float8 * batchBuff){
+__kernel void tempStoreDose(__global float8 * doseCounter, __global float8 * batchBuff){
 	size_t idx = get_global_id(0);
 	size_t idy = get_global_id(1);
 	size_t idz = get_global_id(2);
@@ -81,4 +86,23 @@ __kernel void tempStore(__global float8 * doseCounter, __global float8 * batchBu
 //	if(doseBuff[absId].s0 > 0.0f)
 //		printf("buff, %v8f\n", doseBuff[absId]);
 
+}
+
+
+__kernel void tempStoreSpectrum(__global float * spectrumCounter, __global float * spectrumBuff){
+	size_t bin = get_global_id(0);
+	size_t slice = get_global_id(1);
+	size_t absId = bin + slice*get_global_size(0);
+	int nSpectrum = get_global_size(0)*get_global_size(1);
+	for(int i  = 0; i < NSPECTRUMCOUNTERS; i++){
+		spectrumBuff[absId] += spectrumCounter[absId + i*nSpectrum];
+		spectrumCounter[absId + i*nSpectrum] = 0;
+	}
+}
+
+__kernel void finalizeSpectrum( __global float * spectrumBuff, ulong nParticles){
+	size_t bin = get_global_id(0);
+	size_t slice = get_global_id(1);
+	size_t absId = bin + slice*get_global_size(0);
+	spectrumBuff[absId] /= nParticles;
 }

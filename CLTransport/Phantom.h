@@ -7,17 +7,21 @@ class MSPR;
 class Phantom
 {
 public:
-	Phantom(OpenCLStuff &, cl_float3 voxSize_, cl_int3 size_, const DensCorrection & densityCF, const MSPR & massSPR, const char* CTFile = NULL);
+	Phantom(OpenCLStuff &, cl_float3 voxSize_, cl_int3 size_, const DensCorrection & densityCF, const MSPR & massSPR, cl_int nBins_, const char* CTFile = NULL);
 	virtual ~Phantom();
 	cl::Image3D & voxelGPU(){ return voxelAttributes; }
 	cl::Buffer & doseCounterGPU(){ return doseCounter; }
+	cl::Buffer & spectrumCounterGPU(){ return spectrumCounter; }
 //	cl::Buffer & errorCounterGPU(){ return errorCounter; }
 	cl_float3 voxelSize() const { return voxSize; }
 	void finalize(OpenCLStuff & stuff, cl_uint nPaths);
 	void output(OpenCLStuff & stuff, std::string & outDir);
 	void tempStore(OpenCLStuff & stuff);
+	cl_int numberOfBins(){ return nBins; }
+	
 
 private:
+	cl_int nBins;
 	cl_float3 voxSize;
 	cl_int3 size;
 	cl_float4 * attributes;
@@ -29,6 +33,8 @@ private:
 	cl::Buffer doseBuff;
 	cl::Buffer batchBuff;
 	cl::Buffer errorBuff;
+	cl::Buffer spectrumCounter;
+	cl::Buffer spectrumBuff;
 
 	cl_float * totalDose;
 	cl_float * primaryFluence;
@@ -38,6 +44,7 @@ private:
 	cl_float * heavyDose;
 	cl_float * primaryDose;
 	cl_float * secondaryDose;
+	cl_float * spectrum;
 
 	cl_float * doseErr;
 	cl_float * primaryFluenceErr;
@@ -47,6 +54,7 @@ private:
 	cl_float * heavyDoseErr;
 	cl_float * primaryDoseErr;
 	cl_float * secondaryDoseErr;
+
 
 
 	float ct2den(cl_float huValue) const;

@@ -83,7 +83,7 @@ void ParticleStatus::propagate(OpenCLStuff & stuff, Phantom * phantom, MacroCros
 	int err;
 	cl::EnqueueArgs arg(stuff.queue, globalRange);
 	
-	cl::make_kernel < cl::Buffer &, cl::Buffer &, cl::Image3D &, cl_float3, cl::Image2D &, cl::Image2D &, cl::Image2D &, cl::Buffer &, cl::Buffer &, cl_int, cl::Buffer &> propagateKernel(program, "propagate", &err);	
+	cl::make_kernel < cl::Buffer &, cl::Buffer &, cl::Buffer &, cl_int, cl::Image3D &, cl_float3, cl::Image2D &, cl::Image2D &, cl::Image2D &, cl::Buffer &, cl::Buffer &, cl_int, cl::Buffer &> propagateKernel(program, "propagate", &err);	
 	
 	cl_int randSeed = rand();
 //	std::cout << randSeed << std::endl;
@@ -92,7 +92,7 @@ void ParticleStatus::propagate(OpenCLStuff & stuff, Phantom * phantom, MacroCros
 	stuff.queue.enqueueWriteBuffer(mutex, CL_TRUE, 0, sizeof(cl_int), &initialMutext);
 
 	stuff.queue.finish();
-	propagateKernel(arg, particleStatus.back(), phantom->doseCounterGPU(), phantom->voxelGPU(), phantom->voxelSize(), macroSigma->gpu(),
+	propagateKernel(arg, particleStatus.back(), phantom->doseCounterGPU(), phantom->spectrumCounterGPU(), phantom->numberOfBins(), phantom->voxelGPU(), phantom->voxelSize(), macroSigma->gpu(),
 		resStpPowWater->gpu(), massStpPowRatio->gpu(), secondary->particleStatus[0], secondary->nSecondBuffer(), randSeed, mutex);
 	std::cout << "number of protons in this batch: " << *globalRange << std::endl;
 	stuff.queue.finish();

@@ -10,8 +10,8 @@
 #include <math.h>
 
 
-Phantom::Phantom(OpenCLStuff & stuff, cl_float3 voxSize_, cl_int3 size_, const DensCorrection & densityCF, const MSPR & massSPR, const char* CTFile)
-	:voxSize(voxSize_), size(size_)
+Phantom::Phantom(OpenCLStuff & stuff, cl_float3 voxSize_, cl_int3 size_, const DensCorrection & densityCF, const MSPR & massSPR, cl_int nBins_, const char* CTFile)
+	:voxSize(voxSize_), size(size_), nBins(nBins_)
 {
 	int err;
 	cl::ImageFormat format(CL_RGBA, CL_FLOAT);
@@ -117,6 +117,26 @@ Phantom::Phantom(OpenCLStuff & stuff, cl_float3 voxSize_, cl_int3 size_, const D
 	cl::EnqueueArgs arg2(stuff.queue, globalRange);
 	initDoseCounterKernel(arg2, doseBuff);
 	initDoseCounterKernel(arg2, errorBuff);
+
+	spectrumCounter = cl::Buffer(stuff.context, CL_MEM_READ_WRITE, NSPECTRUMCOUNTERS*sizeof(cl_float)*nBins*size.s[2], NULL, &err);
+	if (err != 0){
+		std::cout << "spectrumCounter init failed: " << err << std::endl;
+		exit(-1);
+	}
+	spectrumBuff = cl::Buffer(stuff.context, CL_MEM_READ_WRITE, sizeof(cl_float)*nBins*size.s[2], NULL, &err);
+	if (err != 0){
+		std::cout << "spectrumBuff init failed: " << err << std::endl;
+		exit(-1);
+	}
+
+	cl::make_kernel<cl::Buffer &> initSpectrumKernel(program, "initializeSpectrum", &err);
+	globalRange = cl::NDRange(NSPECTRUMCOUNTERS*nBins*size.s[2]);
+	cl::EnqueueArgs arg3(stuff.queue, globalRange);
+	initSpectrumKernel(arg3, spectrumCounter);
+
+	globalRange = cl::NDRange(nBins*size.s[2]);
+	cl::EnqueueArgs arg4(stuff.queue, globalRange);
+	initSpectrumKernel(arg4, spectrumBuff);
 }
 
 
@@ -132,6 +152,7 @@ Phantom::~Phantom()
 	delete[] heavyDose;
 	delete[] primaryDose;
 	delete[] secondaryDose;
+	delete[] spectrum;
 
 	delete[] doseErr;
 	delete[] primaryFluenceErr;
@@ -229,10 +250,22 @@ cl_float Phantom::ct2eden(cl_float material, cl_float density) const{
 }
 
 void Phantom::finalize(OpenCLStuff & stuff, cl_uint nPaths){
-	cl::make_kernel<cl::Buffer &, cl::Buffer &, cl::Buffer &, cl::Image3D &, cl_float3, cl_uint> finalizeKernel(program, "finalize");
+	cl::make_kernel<cl::Buffer &, cl::Buffer &, cl::Buffer &, cl::Image3D &, cl_float3, cl_uint> finalizeDoseKernel(program, "finalizeDose");
 	cl::NDRange globalRange(size.s[0], size.s[1], size.s[2]);
 	cl::EnqueueArgs arg(stuff.queue, globalRange);
-	finalizeKernel(arg, batchBuff, doseBuff, errorBuff, voxelAttributes, voxSize, nPaths);
+	finalizeDoseKernel(arg, batchBuff, doseBuff, errorBuff, voxelAttributes, voxSize, nPaths);
+
+	int err;
+	cl::make_kernel<cl::Buffer &, cl_ulong> finalizeKernelSpectrum(program, "finalizeSpectrum");
+	cl::NDRange globalRangeSpectrum(nBins, size.s[2]);
+	cl::EnqueueArgs argSpectrum(stuff.queue, globalRangeSpectrum);
+	err = stuff.queue.finish();
+	finalizeKernelSpectrum(argSpectrum, spectrumBuff, nPaths);
+	err = stuff.queue.finish();
+	if (err != 0){
+		std::cout << "something wrong after finalize: " << err << std::endl;
+		exit(-1);
+	}
 }
 
 void Phantom::output(OpenCLStuff & stuff, std::string & outDir){
@@ -263,7 +296,6 @@ void Phantom::output(OpenCLStuff & stuff, std::string & outDir){
 	heavyDoseErr = new cl_float[nVoxels]();
 	primaryDoseErr = new cl_float[nVoxels]();
 	secondaryDoseErr = new cl_float[nVoxels]();
-
 
 	std::string fileTotalBin = outDir+"totalDose.bin";
 	std::string filePFBin = outDir + "primaryFluence.bin";
@@ -370,12 +402,40 @@ void Phantom::output(OpenCLStuff & stuff, std::string & outDir){
 	std::ofstream ofsSDErr(fileSDErr, std::fstream::out | std::fstream::trunc | std::fstream::binary);
 	ofsSDErr.write((const char *)(secondaryDoseErr), nVoxels * sizeof(cl_float) / sizeof(char));
 	ofsSDErr.close();
+
+
+	spectrum = new cl_float[nBins*size.s[2]]();
+	err = stuff.queue.enqueueReadBuffer(spectrumBuff, CL_TRUE, 0, sizeof(cl_float) * nBins*size.s[2], spectrum);
+	std::string fileSpectrum = outDir + "spectrum";
+	std::ofstream ofsSpectrum(fileSpectrum, std::fstream::out | std::fstream::trunc);
+	for (int j = 0; j < size.s[2]; j++){
+		for (int i = 0; i < nBins; i++)
+			ofsSpectrum << spectrum[j*nBins + i] << '\t';
+		ofsSpectrum << '\n';
+	}
+	ofsSpectrum.close();
 }
 
 
 void Phantom::tempStore(OpenCLStuff & stuff){
-	cl::make_kernel<cl::Buffer &, cl::Buffer &> tempStoreKernel(program, "tempStore");
-	cl::NDRange globalRange(size.s[0], size.s[1], size.s[2]);
-	cl::EnqueueArgs arg(stuff.queue, globalRange);
-	tempStoreKernel(arg, doseCounter, batchBuff);
+
+	int err;
+	cl::make_kernel<cl::Buffer &, cl::Buffer &> tempStoreKernelDose(program, "tempStoreDose");
+	cl::make_kernel<cl::Buffer &, cl::Buffer &> tempStoreKernelSpectrum(program, "tempStoreSpectrum");
+	cl::NDRange globalRangeSpectrum(nBins, size.s[2]);
+	cl::EnqueueArgs argSpectrum(stuff.queue, globalRangeSpectrum);
+	cl::NDRange globalRangeDose(size.s[0], size.s[1], size.s[2]);
+	cl::EnqueueArgs argDose(stuff.queue, globalRangeDose);
+	err = stuff.queue.finish();
+	if (err != 0){
+		std::cout << "something wrong before tempStore: " << err << std::endl;
+		exit(-1);
+	}
+	tempStoreKernelDose(argDose, doseCounter, batchBuff);
+	tempStoreKernelSpectrum(argSpectrum, spectrumCounter, spectrumBuff);
+	err = stuff.queue.finish();
+	if (err != 0){
+		std::cout << "something wrong after tempStore: " << err << std::endl;
+		exit(-1);
+	}
 }

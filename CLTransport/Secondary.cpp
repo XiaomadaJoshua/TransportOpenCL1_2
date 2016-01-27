@@ -6,7 +6,6 @@
 
 Secondary::Secondary(OpenCLStuff & stuff)
 {
-	buildProgram(stuff);
 	size = SECONDARYNUMBERRATIO * stuff.nBatch();
 	int err;
 	particleStatus.push_back(cl::Buffer(stuff.context, CL_MEM_READ_WRITE, sizeof(PS)*size, NULL, &err));
