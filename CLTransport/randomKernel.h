@@ -43,8 +43,16 @@ float MTrng(int * iseed){
 }
 
 float MTGaussian(int * iseed){
-	return inverseCumulativeNormal(MTrng(iseed));
+	float u1 = MTrng(iseed);
+	float u2 = MTrng(iseed);
+	return sqrt(-2.0f*log(u1))*cos(2.0f*PI*u2);
 }
+
+/*
+float MTGaussian(int * iseed){
+return inverseCumulativeNormal(MTrng(iseed));
+}
+*/
 
 float MTExp(int * iseed, float lambda){
 
