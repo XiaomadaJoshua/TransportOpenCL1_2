@@ -10,6 +10,7 @@ typedef struct __attribute__ ((aligned)) ParticleStatus{
 }PS;
 
 
+// init beam as gaussian shape in x, y, and energy direction
 __kernel void initParticles(__global PS * particle, float T, float2 width, float3 sourceCenter, float m, float c, int randSeed){
 	size_t gid = get_global_id(0);
 	
@@ -21,10 +22,10 @@ __kernel void initParticles(__global PS * particle, float T, float2 width, float
 	particle[gid].pos.z = sourceCenter.z;
 	int iseed[2];
 	iseed[0] = randSeed;
-	iseed[1] = gid;
+	iseed[1] = gid*gid;
 	jswRand(iseed);
-	particle[gid].pos.x = (MTrng(iseed) - 0.5f) * width.s0;
-	particle[gid].pos.y = (MTrng(iseed) - 0.5f) * width.s1;
+	particle[gid].pos.x = MTGaussian(iseed) * width.s0;
+	particle[gid].pos.y = MTGaussian(iseed) * width.s1;
 	
 	particle[gid].dir = normalize((float3)(0.0f, 0.0f, 0.0f) - sourceCenter);
 	
@@ -32,13 +33,61 @@ __kernel void initParticles(__global PS * particle, float T, float2 width, float
 //	particle[gid].dir.y = 0.0f;
 //	particle[gid].dir.z = 0.0f;
 
-	particle[gid].energy = T;
+	particle[gid].energy = T + MTGaussian(iseed)*1.8f;
 	particle[gid].maxSigma = 0.0f;
 	particle[gid].mass = m;
 	particle[gid].charge = c;
 	particle[gid].ifPrimary = 1;
 }
 
+/*
+// init beamlets in triangle shape
+__kernel void initParticles(__global PS * particle, float T, float2 width, float3 sourceCenter, float m, float c, int randSeed){
+	size_t gid = get_global_id(0);
+	
+//	if(gid == 1){
+//		int size = sizeof(PS);
+//		printf("size of PS: %d\n", size);
+//	}
+
+	particle[gid].pos.z = sourceCenter.z;
+	int iseed[2];
+	iseed[0] = randSeed;
+	iseed[1] = gid*gid;
+	jswRand(iseed);
+	
+	float posX, posY, energy;
+	float rejector;
+	do{
+		posX= (MTrng(iseed)-0.5f)*0.2f;
+		rejector = posX > 0.0f ? 0.1f - posX : 0.1f + posX;
+	}while(MTrng(iseed) > rejector);
+	do{
+		posY= (MTrng(iseed)-0.5f)*0.2f;
+		rejector = posY > 0.0f ? 0.1f - posY : 0.1f + posY;
+	}while(MTrng(iseed) > rejector);
+	
+	particle[gid].pos.x = posX;
+	particle[gid].pos.y = posY;
+	
+	particle[gid].dir = normalize((float3)(0.0f, 0.0f, 0.0f) - sourceCenter);
+	
+//	particle[gid].dir.x = -1.0f;
+//	particle[gid].dir.y = 0.0f;
+//	particle[gid].dir.z = 0.0f;
+
+	do{
+		energy = (MTrng(iseed)-0.5f)*2.0f;
+		rejector = energy > 0.0f ? 1.0f - energy : 1.0f + energy;
+	}while(MTrng(iseed) > rejector);
+	
+	particle[gid].energy = energy + T;
+	particle[gid].maxSigma = 0.0f;
+	particle[gid].mass = m;
+	particle[gid].charge = c;
+	particle[gid].ifPrimary = 1;
+}
+*/
 
 bool ifInsidePhantom(float3 pos, float3 voxSize, int3 phantomSize, int3 * voxIndex, int * absIndex){
 	int3 ifInside = isgreaterequal(pos, -convert_float3(phantomSize)*voxSize/2.0f) * islessequal(pos, convert_float3(phantomSize)*voxSize/2.0f);
@@ -345,7 +394,7 @@ void store(PS * newOne, __global PS * secondary, volatile __global uint * nSecon
 
 
 void ionization(PS * thisOne, global float8 * doseCounter, int absIndex, int nVoxels, 
-				int * iseed, float stepLength, read_only image2d_t MSPR, float material){
+				int * iseed, float stepLength, read_only image2d_t MSPR, float material, bool ifScore){
 
 	float E = thisOne->energy + thisOne->mass;
 	float Te;
@@ -360,7 +409,8 @@ void ionization(PS * thisOne, global float8 * doseCounter, int absIndex, int nVo
 
 
 	update(thisOne, 0.0f, Te, 0.0f, 0.0f, 0, 0.0f);
-	score(doseCounter, absIndex, nVoxels, Te, stepLength, thisOne->ifPrimary, iseed, MSPR, thisOne, material);
+	if(ifScore)
+		score(doseCounter, absIndex, nVoxels, Te, stepLength, thisOne->ifPrimary, iseed, MSPR, thisOne, material);
 
 }
 
@@ -421,7 +471,7 @@ void PPElastic(PS * thisOne, __global PS * secondary, volatile __global uint * n
 }
 
 
-void POElastic(PS * thisOne, global float8 * doseCounter, int absIndex, int nVoxels, int * iseed, read_only image2d_t MSPR, float material){
+void POElastic(PS * thisOne, global float8 * doseCounter, int absIndex, int nVoxels, int * iseed, read_only image2d_t MSPR, float material, bool ifScore){
 	// sample energy transferred to oxygen
 	float energyTransfer;
 	
@@ -456,11 +506,12 @@ void POElastic(PS * thisOne, global float8 * doseCounter, int absIndex, int nVox
 	phi = MTrng(iseed)*2.0f*PI;
 
 	update(thisOne, 0.0f, energyTransfer, theta, phi, 0, 0.0f);
-	scoreHeavy(doseCounter, absIndex, nVoxels, energyTransfer, iseed, MSPR, thisOne, material);
+	if(ifScore)
+		scoreHeavy(doseCounter, absIndex, nVoxels, energyTransfer, iseed, MSPR, thisOne, material);
 }
 
 void POInelastic(PS * thisOne, __global PS * secondary, volatile __global uint * nSecondary, global float8 * doseCounter, 
-				 int absIndex, int nVoxels, int * iseed, global int * mutex2Secondary, read_only image2d_t MSPR, float material){
+				 int absIndex, int nVoxels, int * iseed, global int * mutex2Secondary, read_only image2d_t MSPR, float material, bool ifScore){
 	float rand = MTrng(iseed);
 
 	float bindEnergy = EBIND;
@@ -503,14 +554,14 @@ void POInelastic(PS * thisOne, __global PS * secondary, volatile __global uint *
 		bindEnergy *= 0.5f;
 		remainEnergy -= energy2SecondParticle;
 	}
-
-	scoreHeavy(doseCounter, absIndex, nVoxels, energyDeposit, iseed, MSPR, thisOne, material);
+	if(ifScore)
+		scoreHeavy(doseCounter, absIndex, nVoxels, energyDeposit, iseed, MSPR, thisOne, material);
 	update(thisOne, 0.0f, thisOne->energy, 0.0f, 0.0f, 0, 0.0f);
 }
 
 
 void hardEvent(PS * thisOne, float stepLength, float4 vox, read_only image2d_t MCS, read_only image2d_t MSPR, float material, global float8 * doseCounter,
-			 int absIndex, int nVoxels, global PS * secondary, volatile __global uint * nSecondary, int * iseed, global int * mutex2Secondary){
+			 int absIndex, int nVoxels, global PS * secondary, volatile __global uint * nSecondary, int * iseed, global int * mutex2Secondary, bool ifScore){
 	sampler_t sampler = CLK_NORMALIZED_COORDS_FALSE | CLK_ADDRESS_CLAMP_TO_EDGE | CLK_FILTER_LINEAR;
 	float4 mcs = read_imagef(MCS, sampler, (float2)(thisOne->energy/0.5f - 0.5f, 0.5f));
 	float sigIon = mcs.s0*vox.s3;
@@ -525,7 +576,7 @@ void hardEvent(PS * thisOne, float stepLength, float4 vox, read_only image2d_t M
 	float rand = MTrng(iseed);
 	rand *= thisOne->maxSigma > sig ? thisOne->maxSigma : sig;
 	if(rand < sigIon){
-		ionization(thisOne, doseCounter, absIndex, nVoxels, iseed, stepLength, MSPR, material);
+		ionization(thisOne, doseCounter, absIndex, nVoxels, iseed, stepLength, MSPR, material, ifScore);
 		return;
 	}
 	#if defined(__ONLYEM__) && (__ONLYEM__ == 0)
@@ -536,12 +587,12 @@ void hardEvent(PS * thisOne, float stepLength, float4 vox, read_only image2d_t M
 	}
 	else if(rand < sigIon + sigPPE + sigPOE){
 		if(thisOne->energy > POETHRESHOLD)
-			POElastic(thisOne, doseCounter, absIndex, nVoxels, iseed, MSPR, material);
+			POElastic(thisOne, doseCounter, absIndex, nVoxels, iseed, MSPR, material, ifScore);
 		return;
 	} 
 	else if(rand < sigIon+sigPPE + sigPOE + sigPOI){
 		if(thisOne->energy > POITHRESHOLD)
-			POInelastic(thisOne, secondary, nSecondary, doseCounter, absIndex, nVoxels, iseed, mutex2Secondary, MSPR, material);
+			POInelastic(thisOne, secondary, nSecondary, doseCounter, absIndex, nVoxels, iseed, mutex2Secondary, MSPR, material, ifScore);
 		return;
 	}
 	#endif
@@ -563,6 +614,31 @@ void rayTrace(PS * particle, int3 phantomSize, float3 voxSize){
 	update(particle, translation + 1e-5, 0.0, 0.0, 0.0, 0, 0.0);
 //	printf("particle pos = %f, %f, %f, dir = %f, %f, %f, delta = %v3f, translation = %f\n", 
 //		particle->pos.x, particle->pos.y, particle->pos.z, particle->dir.x, particle->dir.y, particle->dir.z, delta, translation);
+}
+
+
+float intersection(float3 r1, float3 r2, float3 o, float r){
+	float3 p = r2 - o;
+	float3 q = r1 - r2;
+	float a = dot(q,q);
+	float b = 2.0f*dot(q,p);
+	float c = dot(p,p) - r*r;
+	float delta = b*b-4.0f*a*c;
+
+	if(delta <= 0.0f)
+		return 0.0f;
+		
+	float t1 = (-b-sqrt(delta))/2.0f/a;
+	float t2 = (-b+sqrt(delta))/2.0f/a;
+
+	if(t1 > 0.0f && t2 < 1.0f)
+		return t2 - t1;
+	if(t1 < 0.0f && t2 > 0.0f)
+		return t2 < 1.0f ? t2 : 1.0f;
+	if(t2 > 1.0f && t1 < 1.0f)
+		return (1.0f-t1) < 1.0f ? (1.0f-t1) : 1.0f;
+
+	return 0.0f;
 }
 
 
@@ -600,30 +676,25 @@ __kernel void propagate(__global PS * particle, __global float8 * doseCounter,
 	float4 vox;
 	bool ifHard;
 	int step = 0;
+	float3 voxCenter;
+	float scorePointRadius = 0.05;
+	float scoreRatio;
+	bool ifScore;
+	float3 phantomBoundary = convert_float3(phantomSize) * voxSize;
+
 	
 	if(!ifInsidePhantom(thisOne.pos, voxSize, phantomSize, &voxIndex, &absIndex))
 		rayTrace(&thisOne, phantomSize, voxSize);
 
 	while (ifInsidePhantom(thisOne.pos, voxSize, phantomSize, &voxIndex, &absIndex)){
 		step++;
-//		if(gid == 0)
-//			printf("%d, %d\n", iseed[0], iseed[1]);
-//		printf("step = %d\n", step);
-
+		voxCenter = convert_float3(voxIndex)*voxSize - phantomBoundary * 0.5f + voxSize * 0.5f;
 		vox = read_imagef(voxels, voxSampler, (float4)(convert_float3(voxIndex), 0.0f));
-//		printf("vox = %v4f\n", vox);
+
 		if(vox.s0 < -800.0f){
 			update(&thisOne, step2VoxBoundary(thisOne.pos, thisOne.dir, voxSize, &crossBound, phantomSize, voxIndex), 0, 0, 0, crossBound, 0.0f);
 			continue;
 		}
-//		if(absIndex != absIndex2){
-//			absIndex = absIndex2;
-//			scoreFluence(doseCounter, absIndex, thisOne.ifPrimary);
-//		}
-//		if(step > 2000){
-//			printf("\nvoxIndex = %v3d, absIndex = %d\n", voxIndex, absIndex);
-//			printf("energy %f, dir %v3f, position %v3f\n", thisOne.energy, thisOne.dir, thisOne.pos);	
-//		}
 
 
 		if (thisOne.energy <= MINPROTONENERGY){
@@ -685,15 +756,21 @@ __kernel void propagate(__global PS * particle, __global float8 * doseCounter,
 		theta = MTGaussian(iseed) * theta0;
 		phi = 2.0f*PI*MTrng(iseed);
 		thisOne.maxSigma = sigma;
-		update(&thisOne, stepLength, energyTransfer, theta, phi, crossBound, 0.0f);		
-		score(doseCounter, absIndex, nVoxels, energyTransfer, stepLength, thisOne.ifPrimary, iseed, MSPR, &thisOne, vox.s1);
+		
+		scoreRatio = intersection(thisOne.pos, thisOne.pos+stepLength*thisOne.dir, voxCenter, scorePointRadius);
+//		printf("r1 = %v3f, r2 = %v3f, o = %v3f, r = %f, ratio = %f\n", thisOne.pos, thisOne.pos+stepLength*thisOne.dir, voxCenter, scorePointRadius, scoreRatio);
+		update(&thisOne, stepLength, energyTransfer, theta, phi, crossBound, 0.0f);
+		score(doseCounter, absIndex, nVoxels, energyTransfer*scoreRatio, stepLength, thisOne.ifPrimary, iseed, MSPR, &thisOne, vox.s1);
 		scoreFluence(doseCounter, absIndex, nVoxels, thisOne.ifPrimary, stepLength, mutex, iseed);
 
 		//hard event
 		if(!ifHard)
 			continue;
-
-		hardEvent(&thisOne, stepLength, vox, MCS, MSPR, vox.s1, doseCounter, absIndex, nVoxels, secondary, nSecondary, iseed, mutex);
+		if(distance(thisOne.pos, voxCenter) < scorePointRadius)
+			ifScore = 1;
+		else
+			ifScore = 0;
+		hardEvent(&thisOne, stepLength, vox, MCS, MSPR, vox.s1, doseCounter, absIndex, nVoxels, secondary, nSecondary, iseed, mutex, ifScore);
 
 	}
 	
