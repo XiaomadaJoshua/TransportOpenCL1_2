@@ -6,9 +6,10 @@
 *.user
 *.userosscache
 *.sln.docstates
-
-CLTransport/debug.txt
-CLTransport/Output/
+*.tlog
+Output/
+3rdParty/
+debug.txt
 
 # Build results
 [Dd]ebug/
@@ -21,6 +22,7 @@ build/
 bld/
 [Bb]in/
 [Oo]bj/
+
 
 # Roslyn cache directories
 *.ide/
