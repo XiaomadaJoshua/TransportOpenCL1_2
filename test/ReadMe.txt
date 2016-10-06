@@ -1,40 +1,37 @@
-========================================================================
-    CONSOLE APPLICATION : test Project Overview
-========================================================================
+goPMC
 
-AppWizard has created this test application for you.
+This package consists of interfaces and dynamic link libraries (dll) of a Monte Carlo 
+simulation engine for proton therapy, goPMC. The binaries were built with Visual Studio 
+2013 in debug x64 configuration. Undefined behavior may occur when different compilers 
+or configurations are used.
 
-This file contains a summary of what you will find in each of the files that
-make up your test application.
+System requirements:
+OpenCL 1.1 or higher.
+CPU/GPU supporting OpenCL.
+
+Subdirectories:
+include: 
+	goPMC.h: goPMC interface.
+	cl.hpp: c++ wrapper for OpenCL 1.1.
+bin:
+	dcmtk.dll(.lib) and libDicomRT.dll(.lib): Libraries for reading and processing Dicom CT data.
+	goPMC.dll(.lib): goPMC library.
+input: Physics input data.
 
 
-test.vcxproj
-    This is the main project file for VC++ projects generated using an Application Wizard.
-    It contains information about the version of Visual C++ that generated the file, and
-    information about the platforms, configurations, and project features selected with the
-    Application Wizard.
+Related publications:
 
-test.vcxproj.filters
-    This is the filters file for VC++ projects generated using an Application Wizard. 
-    It contains information about the association between the files in your project 
-    and the filters. This association is used in the IDE to show grouping of files with
-    similar extensions under a specific node (for e.g. ".cpp" files are associated with the
-    "Source Files" filter).
+[1] GPU-based fast Monte Carlo dose calculation for proton therapy
+Xun Jia, Jan Schuemann, Harald Paganetti and Steve B. Jiang
+Physics in Medicine and Biology, Volume 57, Number 23
 
-test.cpp
-    This is the main application source file.
+[2] Validation of a GPU-based Monte Carlo code (gPMC) for proton radiation therapy: clinical cases study
+Drosoula Giantsoudi, Jan Schuemann, Xun Jia, Stephen Dowdell, Steve B. Jiang and Harald Paganetti
+Physics in Medicine and Biology, Volume 60, Number 6
 
-/////////////////////////////////////////////////////////////////////////////
-Other standard files:
+[3] Recent developments and comprehensive evaluations of a GPU-based Monte Carlo package for proton therapy
+Nan Qin, Pablo Botas, Drosoula Giantsoudi, Jan Schuemann, Zhen Tian, Steve B. Jiang, Harald Paganetti and Xun Jia
+Accepted by Physics in Medicine and Biology
 
-StdAfx.h, StdAfx.cpp
-    These files are used to build a precompiled header (PCH) file
-    named test.pch and a precompiled types file named StdAfx.obj.
 
-/////////////////////////////////////////////////////////////////////////////
-Other notes:
-
-AppWizard uses "TODO:" comments to indicate parts of the source code you
-should add to or customize.
-
-/////////////////////////////////////////////////////////////////////////////
+For more questions please email to nan.qin@utsouthwestern.edu.

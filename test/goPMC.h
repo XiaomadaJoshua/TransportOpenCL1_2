@@ -1,3 +1,14 @@
+/*
+*
+* file  goPMC.h
+* goPMC interfaces declaration.
+*
+* author Nan Qin
+*
+* last update on 9/21/2016
+*
+*/
+
 #pragma once
 
 #ifdef GOPMC_EXPORTS
